@@ -44,10 +44,10 @@ E' formata da:
 2Byte come id del sensore
 2Byte come valore del sensore
 
-(2Byte + 2Byte) * 16 sensori = 64Byte = 1 DWORD
+(2Byte + 2Byte) * 16 sensori = 64Byte
 
 ### RECORD
 Si utilizzando: 
 2Byte per identificare il sensore
 
-(2Byte * 16 sensori) = 34Byte = 1 WORD 
+(2Byte * 16 sensori) = 32Byte 
