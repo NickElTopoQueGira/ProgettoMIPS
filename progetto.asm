@@ -50,27 +50,27 @@ main:
 
 # aggiornamento del contatore di rest
 agg_cont_reset:
-    lw      $t9, $s4                # carico nel registro $t9 il valore di $s4
+    lw      $t9, 0($s4)             # carico nel registro $t9 il valore di $s4
     addi    $t9, $t9, 1             # incremento il contatore di 1
-    sw      $t9, $s4                # aggiorno $s4 con il nuovo valore
+    sw      $t9, 0($s4)             # aggiorno $s4 con il nuovo valore
     jr      $ra                     # ritorno al chiamante
 
 reset_cont_reset:
-    lw      $t9, $s4                # carico nel registro $t9 il valore di $s4
+    lw      $t9, 0($s4)             # carico nel registro $t9 il valore di $s4
     move    $t9, $zero              # azzero
-    sw      $t9, $s4                # aggiorno $s4 con il nuovo valore
+    sw      $t9, 0($s4)                # aggiorno $s4 con il nuovo valore
     jr      $ra                     # ritorno al chiamante
 
 agg_cont_allarm:
-    lw      $t9, $s5                # carico nel registro $t9 il valore di $s5
+    lw      $t9, 0($s5)             # carico nel registro $t9 il valore di $s5
     addi    $t9, $t9, 1             # incremento il contatore di 1
-    sw      $t9, $s5                # aggiorno $s5 con il nuovo valore
+    sw      $t9, 0($s5)             # aggiorno $s5 con il nuovo valore
     jr      $ra                     # ritorno al chiamante
 
 reset_cont_allarm:
-    lw      $t9, $s5                # carico nel registro $t9 il valore di $s5
+    lw      $t9, 0($s5)             # carico nel registro $t9 il valore di $s5
     move    $t9, $zero              # azzero
-    sw      $t9, $s5                # aggiorno $s5 con il nuovo valore
+    sw      $t9, 0($s5)             # aggiorno $s5 con il nuovo valore
     jr      $ra                     # ritorno al chiamante
 
 # -------------- COMMAND --------------
