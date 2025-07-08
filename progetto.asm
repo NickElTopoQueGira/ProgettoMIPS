@@ -46,6 +46,34 @@ main:
     la      $s5, cont_allarm        # carico l'indirizzo del contatore del rest dell'allarme nel registro $s5 
 
 
+    # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
+    leggi_temperature:
+        move     	$t0, $zero              # $t0 contatore 
+        move        $t1, $s2                # copia temporanea di $s2
+        ciclo_di_lettura:
+            bge         $t0, 16, leggi_temperature              # controllo se ho letto tutto lo spazio di memoria
+                                                                # 16 = 64Byte / 4Byte 
+                                                                # quando arrivo al limite massimo, rincomincio da 0
+            # $t2 -> senosre (1 word = (2Byte + 2Byte)) 
+            # $t3 -> numero del sensore (parte sx della word, 2Byte)
+            # $t4 -> valore del sensore (parte dx della word, 2Byte)
+
+            lw          $t2, 0($t1)         # carico in $t2 il valore della word corrente
+            
+            # lettura dei dati
+            srl         $t3, $t2, 16        # ottengo l'id del sensore (16 bit a sinistra)
+            andi        $t4, $t2, 0xFFF     # ottengo il valore del sensore (16 bit a destra)
+
+            # faccio i controlli
+
+            # aggiornamento del contatore e calcolo dell'indirizzo successivo da leggere
+            addi        $t0, 1              # incremento il contatore di 1
+            addi        $t1, $t1, 4         # vado alla prossima word in memoria
+            j           ciclo_di_lettura    # ritorno al ciclo di lettura
+
+
+
+
 # -------------- AGGIORNAMENTO CONTATORI --------------
 
 # aggiornamento del contatore di rest
