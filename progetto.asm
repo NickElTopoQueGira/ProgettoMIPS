@@ -145,11 +145,11 @@ chiama_vvff:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del terzo bit di COMMADN
     ori     $t9, $t9, 0x04          # asserisco il bit
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
-    jr      $ra                     # ritoro al chiamante
+    jr      $ra                     # ritorno al chiamante
 
 # disattiva chiamata VVFF
 end_chiama_vvff:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del terzo bit di COMMADN
     andi    $t9, $t9, 0xFB          # deasserisco il bit con la maschera 0xFB
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
-    jr      $ra                     # ritoro al chiamante
+    jr      $ra                     # ritorno al chiamante
