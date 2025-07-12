@@ -52,35 +52,44 @@ main:
         move     	$t0, $zero              # $t0 contatore 
         move        $t1, $s2                # copia temporanea di $s2
         ciclo_di_lettura:
-            bge         $t0, 16, main                           # controllo se ho letto tutto lo spazio di memoria
-                                                                # 16 = 64Byte / 4Byte 
-                                                                # quando arrivo al limite massimo, rincomincio da 0
+            bge         $t0, 16, main               # controllo se ho letto tutto lo spazio di memoria
+                                                    # 16 = 64Byte / 4Byte 
+                                                    # quando arrivo al limite massimo, rincomincio da 0
             # $t2 -> senosre (1 word = (2Byte + 2Byte)) 
             # $t3 -> numero del sensore (parte sx della word, 2Byte)
             # $t4 -> valore del sensore (parte dx della word, 2Byte)
 
-            lw          $t2, 0($t1)         # carico in $t2 il valore della word corrente
+            lw          $t2, 0($t1)                 # carico in $t2 il valore della word corrente
             
             # lettura dei dati
-            srl         $t3, $t2, 16        # ottengo l'id del sensore (16 bit a sinistra)
-            andi        $t4, $t2, 0xFFF     # ottengo il valore del sensore (16 bit a destra)
+            srl         $t3, $t2, 16                # ottengo l'id del sensore (16 bit a sinistra)
+            andi        $t4, $t2, 0xFFFF            # ottengo il valore del sensore (16 bit a destra)
 
             # faccio i controlli
-                # se la temperatura e' minore di 40gradi
-                ble     $t4, 0x28, aggiorna_successivo        # se la temperatura e' <= 40 gradi
-                                                              # vado al successivo
-                # altrimenti:
-                # la temperatura non e' minore di 40
-                jal     temp_maggiore                         # la temperatura e' > 40 gradi
+            # se la temperatura e' minore di 40gradi
+            ble     $t4, 0x28, aggiorna_successivo  # se la temperatura e' <= 40 gradi
+                                                    # vado al successivo
+            # altrimenti:
+            
+            # prima di eseguire il salto, mi salvo sullo stack
+            # i valori dei registri $t0, $t1
+            addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
+            sw      $t0, $4($sp)                    # salvo nello stack il valore di t0 nella seconda word
+            sw      $t1, $0($sp)                    # salvo nello stack il valore di t1 nella prima word 
+            
+            # eseguo il salto
+            jal     temp_maggiore                   # la temperatura e' > 40 gradi
+
+            # recupero i valori salvati in precedenza nello stack (dopo il salto)
+                lw          $t0, $4($sp)            # recupero il valode del contatore
+                lw          $t1, $0($sp)            # recupero il valode di $t1 prima del salto
+                addi        $sp, $sp, 8             # ripristino lo stack
 
             # aggiornamento del contatore e calcolo dell'indirizzo successivo da leggere
             aggiorna_successivo:
-                addi        $t0, 1              # incremento il contatore di 1
-                addi        $t1, $t1, 4         # vado alla prossima word in memoria
-                j           ciclo_di_lettura    # ritorno al ciclo di lettura
-
-
-# TODO: da rivedere la logica
+                addi        $t0, 1                  # incremento il contatore di 1
+                addi        $t1, $t1, 4             # vado alla prossima word in memoria
+                j           ciclo_di_lettura        # ritorno al ciclo di lettura
 
 # -------------- TEMPERATURA MAGGIORE DI 40 GRADI --------------
 temp_maggiore:
@@ -91,33 +100,49 @@ temp_maggiore:
                                         # nell'area di memoria RECORD
     sh      $t3, 0($t6)                 # salvo l'id del sesnore
 
-    # Se la temperatura e' minore di 60 gradi
-    blt     $t4, 0x3C, temp_max_exit    # se la temperatura e' < 60gradi
-    
-    # temperatura >= 60 gradi
-    jal     temp_sessanta
+    # Se la temperatura e' maggiore di 60 gradi
+    bge     $t4, 0x3C, temp_sessanta    # se la temperatura e' => 60gradi
+    # altrimenti:
+    jal     cond_att_sirena             # verifico se ci sono le condizioni per attivare la sirena
 
-temp_max_exit:
+    # NOTA: ci puo' essere il fumo senza avere necessariamente una temperatura >= 60 gradi
+    
     jr      $ra                         # ritorno al chiamante
 
 # -------------- TEMPERATURA MAGGIORE DI 60 GRADI --------------
 temp_sessanta:
-    # Attivazione della sirena
-    jal     attiva_sirena               # attivazione della sirena
-    jal     agg_cont_sensor             # aggiorno il contatore sensori attivi
+    jal     agg_cont_sensor             # aggiorno il contatore sensori attivi (temp >= 60)
+    jal     cond_att_sirena             # vefifico se ci sono le condizioni per l'attivazione della sirena
+    jal     cond_att_acqua              # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
+    jal     cond_call_VVFF              # verifico se ci sono le condizione per chiamare i VVFF
 
-    # attivazione dell'acqua
-    lw      $t7, $0($s6)                # leggo il valore aggiornato del contatore
-                                        # dei sensori attivi
-    bgt     $t7, 0x2, sirena            # controllo delle condizioni per attivare la sirena
+    jr      $ra                         # ritorno al chiamante
 
-    # attivazione acqua e chiamata ai VVFF
+cond_att_sirena:
+    # se viene rilevato fumo in almeno un sensore, viene attivata la sirena
     
 
-# -------------- CONDIZIONI X ATTIVAZIONE DELLA SIRENA --------------
-sirena:
-    syscall
-    
+cond_att_acqua:
+    # verifica delle condizioni necessarie per attivare l'estrasione ad acqua. 
+    # l'estrazione ad acqua viene attivata solo quando in almeno 2 sensori per almeno 5 sec 
+    # viene rilevata una temperatura >= 60 gradi.
+
+    lw      $t7, $0($s6)                # leggo il valore aggiornato del contatore dei sensori attivi
+    blt     $t7, 0x2, niente            # se i sensori attivi sono < 2 non faccio niente
+    # sesnori attivi >= 2
+    lw      $t8, $0($s5)                # leggo il valore del counter dei sencondi per attivare la sirena
+    blt     $t8, 0x5, niente            # se sono passati meno di 5 secondi non faccio niente
+    # se sono passati 5 secondi
+    jal     attiva_acqua                # viene attivata l'estrazione ad acqua
+
+    jr      $ra                         # ritonro al chiamante
+
+cond_call_VVFF:
+    # faccio cose
+
+niente:
+    jr      $ra                         # ritorno al chiamante
+
 # -------------- AGGIORNAMENTO CONTATORI --------------
 
 # aggiornamento del contatore di rest
