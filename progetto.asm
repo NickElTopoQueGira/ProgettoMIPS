@@ -30,10 +30,6 @@ cont_reset:     .word 0     # contatore per il reset
 cont_allarm:    .word 0     # contatore per la sirena
 cont_sensor:    .word 0     # contatore sensori attivi
 
-
-# NOTA:
-# ripensare i contatori, da implementare conatori locali 
-
 .text
 .globl main
 
@@ -72,7 +68,7 @@ main:
             # faccio i controlli
 
             # controllo se esistono le condizioni x l'attivazione della sirena 
-            move    $a0, $t2                        # argomento 0: valore della word corrente
+            srl     $a0, $t2, 16                    # argomento 0: id del sensore corrente
             jal     attiva_sirena                   # verifico se ci sono le condizioni necessarie per attivare
                                                     # la sirena. NON E' necessario che la temperatura sia superiore 
                                                     # ai 40 gradi.
@@ -105,31 +101,34 @@ main:
                 addi        $t0, 1                  # incremento il contatore di 1
                 addi        $t1, $t1, 4             # vado alla prossima word in memoria
                 j           ciclo_di_lettura        # ritorno al ciclo di lettura
+    
+    # finre del programma
+    syscall
 
 # -------------- TEMPERATURA MAGGIORE DI 40 GRADI --------------
 temp_maggiore:
-    addi        $sp, $sp, -16           # sposto indietro l'idirizzo dello stack pointer 4 word 
-    sw          $a0, 0($sp)             # salvo: id del sensore
-    sw          $a1, 4($sp)             # salvo: valore del sensore
-    sw          $a2, 8($sp)             # salvo: valore del contatore
-    sw          $ra, 12($sp)            # salvo: indirizzo di ritorno
+    addi        $sp, $sp, -16               # sposto indietro l'idirizzo dello stack pointer 4 word 
+    sw          $a0, 0($sp)                 # salvo: id del sensore
+    sw          $a1, 4($sp)                 # salvo: valore del sensore
+    sw          $a2, 8($sp)                 # salvo: valore del contatore
+    sw          $ra, 12($sp)                # salvo: indirizzo di ritorno
 
     # Aggiungo il numero del sensore all'interno di RECORD
-    sll     $t0, $a2, 1                 # calcolo dell'offset
-                                        # $s2 * 2Byte
-    add     $t1, $s3, $t0               # indirizzo di dove mettere il valore
-                                        # nell'area di memoria RECORD
-    sh      $a0, 0($t1)                 # salvo l'id del sesnore
+    sll     $t0, $a2, 1                     # calcolo dell'offset
+                                            # $s2 * 2Byte
+    add     $t1, $s3, $t0                   # indirizzo di dove mettere il valore
+                                            # nell'area di memoria RECORD
+    sh      $a0, 0($t1)                     # salvo l'id del sesnore
 
     # Se la temperatura e' minore di 60 gradi
     blt     $t4, 0x3C, fin_temp_maggiore
     # la temperatura e' >= 60
-    jal     agg_cont_sensor             # aggiorno il contatore sensori attivi (temp >= 60)
+    jal     agg_cont_sensor                 # aggiorno il contatore sensori attivi (temp >= 60)
 
-    lw      $a0, 0($sp)                 # argomento 0: recupero il valore dell'id del sensore
-    jal     cond_att_acqua              # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
+    lw      $a0, 0($sp)                     # argomento 0: recupero il valore dell'id del sensore
+    jal     cond_att_acqua                  # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
     
-    jal     cond_call_VVFF              # verifico se ci sono le condizione per chiamare i VVFF
+    jal     cond_call_VVFF                  # verifico se ci sono le condizione per chiamare i VVFF
 
     fin_temp_maggiore:
         lw      $ra, 12($sp)                # recupero dove devo ritornare
@@ -140,34 +139,36 @@ temp_maggiore:
 # -------------- ATTIVAZIONE DELLA SIRENA --------------
 cond_att_sirena:
     # se viene rilevato fumo in almeno un sensore, viene attivata la sirena
-    addi    $sp, $sp, -8                # sposto indietro l'indirizzo dello stack pointer di 8 byte
-    sw      $a0, 4($sp)                 # salvo il valore del parametro $a0 nello stack locale 
+    addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 byte
+    sw      $a0, 0($sp)                     # salvo: id del sensore
+    sw      $ra, 4($sp)                     # salvo: indirizzo di ritorno 
 
-    srl     $t0, $a0, 16                # recupero l'id del sensore (2 byte)
-    lw      $t1, 0($s0)                 # carico nel registro $t1 il valore di ALLARMS
+    lw      $t0, 0($sp)                     # recupero l'id del sensore (2 byte)
+    lw      $t1, 0($s0)                     # carico nel registro $t1 il valore di ALLARMS
 
     # creazione della maschera
-    sll     $t2, $t0, 1                 # $t2 = ($t1 * 2)
-    addi    $t2, $t2, 1                 # $t2 + 1
+    sll     $t2, $t0, 1                     # $t2 = ($t1 * 2)
+    addi    $t2, $t2, 1                     # $t2 + 1
 
     # isolo il bit di fumo
-    and     $t3, $t1, $t2               # $t3 = ALLARMS and maschera
+    and     $t3, $t1, $t2                   # $t3 = ALLARMS and maschera
 
     # controllo del valore
-    beq     $t3, 0x0, non_attiva_sirena # se il bit di fumo non e' asserito non eseguo niente
+    beq     $t3, 0x0, non_attiva_sirena     # se il bit di fumo non e' asserito non eseguo niente
     # altrimenti
-    jal attiva_sirena                   # attiva la sirena
+    jal attiva_sirena                       # attiva la sirena
 
     non_attiva_sirena:
+        lw      $ra, 4($sp)                 # recupero il valore dell'indirizzo al quale tornare
         addi    $sp, $sp, 8                 # reset dell'indirizzo dello stack pointer 
         jr      $ra                         # ritorno al chiamante
     nop
 
 # -------------- ATTIVAZIONE ACQUA --------------
 cond_att_acqua:
-    addi        $sp, $sp, -8            # sposto indietro l'indirizzo dello stack pointer di 8 byte
-    sw          $a0, 0($sp)             # salvo: id del sensore
-    sw          $ra, 4($sp)             # salvo: indirizzo di ritorno
+    addi        $sp, $sp, -8                # sposto indietro l'indirizzo dello stack pointer di 8 byte
+    sw          $a0, 0($sp)                 # salvo: id del sensore
+    sw          $ra, 4($sp)                 # salvo: indirizzo di ritorno
     
     # verifica delle condizioni necessarie per attivare l'estrasione ad acqua. 
     # l'estrazione ad acqua viene attivata solo quando in almeno 2 sensori per almeno 5 sec 
@@ -182,14 +183,50 @@ cond_att_acqua:
     jal     attiva_acqua                    # viene attivata l'estrazione ad acqua
 
     fin_cond_att_acqua:
-        lw      $ra, 4($sp)             # recupero il valore di $ra
-        addi    $sp, $sp, 8             # resetto lo stack
-        jr      $ra                     # ritorno al chiamante
+        lw      $ra, 4($sp)                 # recupero il valore di $ra
+        addi    $sp, $sp, 8                 # resetto lo stack
+        jr      $ra                         # ritorno al chiamante
     nop
 
 # -------------- CHIAMATA VVFF --------------
 cond_call_VVFF:
-    # faccio cose
+    addi        $sp, $sp, -8
+    sw          $a0, 0($sp)                 # salvo: id del sensore corrente
+    sw          $ra, 4($sp)                 # salvo: registro $ra
+
+    lw          $t0, 0($s0)                 # carico nel registro $t0 ALLARMS
+
+    # la temperatura e' maggiore di 60 gradi per il valore in TEMPERATURE
+    # controllo se anche il bit in ALLARMS della temperatura e' asserito
+
+    # maschera per isolare il primo bit della coppia
+    sll         $t1, $a0, 1                 # $t1 = ($a0 * 2) --> $a0 id del sensore
+
+    # isolo bit della temperatura
+    and         $t2, $t0, $t1               # $t2 = ALLARMS and maschera
+                                            # $t2 contiene il valore del bit della temperatura
+
+    # maschera per isolare il secondo bit della coppia
+    addi        $t1, $t1, 1                 # $t1 = ($a0 * 2) + 1 --> aggiorno la maschera per il secondo bit
+
+    # isolo bit del fumo
+    and         $t3, $t0, $t1               # $t3 = ALLARMS and maschera
+                                            # $t3 contiene il valore del bit di fumo
+
+    # controllo dei bit
+    # controllo del bit della temperatura
+    bne         $t2, 0x1, fin_con_call_VVFF # $t2 != 0x1 -> fine
+    # il bit e' asserito
+    bne         $t3, 0x1, fin_con_call_VVFF # $t3 != 0x1 -> fine
+    # il bit e' asserito
+    jal         chiama_vvff                 # eseguo chiamata
+    
+    fin_con_call_VVFF:
+        lw          $ra, 4($sp)                 # recupero il valore di $ra
+        addi        $sp, $sp, 8                 # resetto lo stack
+        jr          $ra                         # ritorno al chiamante
+        nop
+
 
 # -------------- AZZERA --------------
 azzera:
