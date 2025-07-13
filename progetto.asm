@@ -19,7 +19,7 @@ TEMPERATURE:    .space 64   # definisco lo spazio di 'TEMPERATURE'
                             # allora (2Byte + 2Byte) * 16 sensori = 64Byte
                             # Lo spazio NON vine inizializzato
 
-RECORD:         .space 32   # definisco lo spazio di 'RECIRD'
+RECORD:         .space 32   # definisco lo spazio di 'RECORD'
                             # ogni sensore e' rappresentato solo dal suo id 
                             # il quale pesa 2 Byte
                             # e quindi 2Byte * 16sensori = 32Byte.
@@ -43,7 +43,7 @@ main:
     la      $s3, RECORD             # carico l'indirizzo di RECORD nel registro $s3
     
     # contatori
-    la      $s4, cont_reset         # carico l'indirizzo del contatote del reset nel registro $s4
+    la      $s4, cont_reset         # carico l'indirizzo del contatore del reset nel registro $s4
     la      $s5, cont_allarm        # carico l'indirizzo del contatore del rest dell'allarme nel registro $s5 
     la      $s6, cont_sensor        # carico l'indirizzo del contatore dei sensori attivi
 
@@ -102,7 +102,8 @@ main:
                 addi        $t1, $t1, 4             # vado alla prossima word in memoria
                 j           ciclo_di_lettura        # ritorno al ciclo di lettura
     
-    # finre del programma
+    # fine del programma
+    li      $v0, 10     # codice di uscita dal programma
     syscall
 
 # -------------- TEMPERATURA MAGGIORE DI 40 GRADI --------------
@@ -121,11 +122,11 @@ temp_maggiore:
     sh      $a0, 0($t1)                     # salvo l'id del sesnore
 
     # Se la temperatura e' minore di 60 gradi
-    blt     $t4, 0x3C, fin_temp_maggiore
+    blt     $a1, 0x3C, fin_temp_maggiore
     # la temperatura e' >= 60
     jal     agg_cont_sensor                 # aggiorno il contatore sensori attivi (temp >= 60)
 
-    lw      $a0, 0($sp)                     # argomento 0: recupero il valore dell'id del sensore
+    # lw      $a0, 0($sp)                     # argomento 0: recupero il valore dell'id del sensore
     jal     cond_att_acqua                  # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
     
     jal     cond_call_VVFF                  # verifico se ci sono le condizione per chiamare i VVFF
@@ -215,10 +216,15 @@ cond_call_VVFF:
 
     # controllo dei bit
     # controllo del bit della temperatura
-    bne         $t2, 0x1, fin_con_call_VVFF # $t2 != 0x1 -> fine
+    bne         $t2, 0x1, fin_con_call_VVFF # $t2 != 0x1 -> fin
     # il bit e' asserito
-    bne         $t3, 0x1, fin_con_call_VVFF # $t3 != 0x1 -> fine
+    bne         $t3, 0x1, fin_con_call_VVFF # $t3 != 0x1 -> fin
     # il bit e' asserito
+
+    # verifico se i pompieri sono gia' stati chiamati
+    jal         is_vvff_call
+    beq         $v0, 0x1, fin_con_call_VVFF # i VVFF sono gia' stati chiamati
+    # chiamo i VVFF
     jal         chiama_vvff                 # eseguo chiamata
     
     fin_con_call_VVFF:
@@ -227,6 +233,16 @@ cond_call_VVFF:
         jr          $ra                         # ritorno al chiamante
         nop
 
+
+is_vvff_call:
+    # controllo se il terzo bit di COMMAND e' asserito
+    lb          $t0, 0($s1)             # carico nel registro $t0 il valore di COMMAND
+    
+    andi        $t1, $t0, 0x04          # maschera per isolare il bit
+    srl         $v0, $t1, 2             # shift a dx 
+
+    jr          $ra                     # ritorno al chiamante
+    nop
 
 # -------------- AZZERA --------------
 azzera:
