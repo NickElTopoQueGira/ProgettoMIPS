@@ -100,7 +100,7 @@ main:
 
                 # controllo se esistono le condizioni x l'attivazione della sirena 
                 srl     $a0, $t2, 16                    # argomento 0: id del sensore corrente
-                jal     attiva_sirena                   # verifico se ci sono le condizioni necessarie per attivare
+                jal     cond_att_sirena                 # verifico se ci sono le condizioni necessarie per attivare
                                                         # la sirena. NON E' necessario che la temperatura sia superiore 
                                                         # ai 40 gradi.
 
@@ -313,6 +313,29 @@ _rest:
     jal     reset_cont_sensor
     jr      $ra
     nop
+
+# -------------- TEMPO DI ATTESA --------------
+attendi_un_secondo:
+    addi    $sp, $sp, -4            # sposto indietro lo stak pointer di 4
+    sw      $ra, 0($sp)             # salvo: indirizzo al quale tornare
+
+    li      $t0, $zero              # Inizializzo un contatore temporaneo
+
+    # N di clicli da fare:
+    # dal momento che addi e' un operazione I-Type impiega 4 operazioni
+    # e blt impiega 3 operazioni, devo fare 100 milioni / (4+3) = 100000000 / 7
+    li      $t1, 14285714          # 100 milioni / 7 = 1 secondo
+
+    loop:
+        addi    $t0, $t0, 1         # incremento il contatore di 1  (4 operazioni (R-Type))
+        blt     $t0, $t1, loop      # se $t0 < $t1 -> loop          (3 operazioni)
+        j       fine_attesa_un_sec  
+
+    fine_attesa_un_sec:
+        lw      $ra, 0($sp)         # ricarico il valore
+        addi    $sp, $sp, 4         # rest dello stack
+        jr      $ra                 # ritorno al chiamante
+        nop
 
 # -------------- AGGIORNAMENTO CONTATORI --------------
 
