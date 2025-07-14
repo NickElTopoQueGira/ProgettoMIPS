@@ -49,9 +49,11 @@ msg_sirena_disattiva:    .asciiz "Sirena spenta\n"
 msg_acqua_attiva:        .asciiz "Acqua attiva\n"
 msg_acqua_disattiva:     .asciiz "Acqua spenta\n"
 msg_chiamata_VVFF:       .asciiz "Chiamata VVFF\n"
+msg_VVFF_non_chiamati:   .asciiz "VVFF non chiamati\n"
 msg_temperatura:         .asciiz "Temperatura sensore:  "
 msg_id:                  .asciiz "Id sensore: "
 msg_valore:              .asciiz "Valore sensore: "
+msg_command:             .asciiz "Command: "
 msg_acapo:               .asciiz "\n"
 
 .text
@@ -79,6 +81,10 @@ main:
         leggi_temperature:
             move     	$t0, $zero                      # $t0 contatore 
             move        $t1, $s2                        # copia temporanea di $s2
+            
+            # messaggio sulla console sullo status di COMMAND
+            jal         msg_command_status              # status di command sulla console
+            
             ciclo_di_lettura:
                 bge         $t0, 16, main_ciclo         # controllo se ho letto tutto lo spazio di memoria
                                                         # 16 = 64Byte / 4Byte 
@@ -437,27 +443,29 @@ msg_temperatura_sensore:
     addi    $sp, $sp, -12
     lw      $a0, 0($sp)     # salvo: id del sensore
     lw      $a1, 4($sp)     # salvo: valore del sensore
-    lw      $ra, 8($sp)
+    lw      $ra, 8($sp)     # salvo: valore dell'indirizzo di ritorno
+
+    lw      $t0, 0($sp)     # recupero id del sensore
+    lw      $t1, 4($sp)     # recupero valore del sensore
 
     # scritta: Temperatura sensore
     li      $v0, 4
-    li      $a0, msg_temperatura
+    la      $a0, msg_temperatura
     syscall
 
     # scritta: Id
     li      $v0, 4
-    li      $a0, msg_id
+    la      $a0, msg_id
     syscall
 
     # id del sensore
     li      $v0, 1
-    lw      $t0, 0($sp)
     move    $a0, $t0
     syscall
 
     # scritta: Valore
     li      $v0, 4
-    li      $a0, msg_valore
+    la      $a0, msg_valore
     syscall
 
     # valore del sensore
@@ -468,10 +476,69 @@ msg_temperatura_sensore:
 
     # scritta: \n
     li      $v0, 4
-    li      $a0, msg_acapo
+    la      $a0, msg_acapo
     syscall
 
-    lw      $ra, 8($sp)
-    addi    $sp, $sp, 8
-    jr      $ra
-    nop
+    fin_msg_temperatura_sensore:
+        lw      $ra, 8($sp)     # recupero il valore dell'indirizzo di ritorno
+        addi    $sp, $sp, 8     # resetto lo stack
+        jr      $ra             # ritorno al chiamante
+        nop
+
+# -------------- MESSAGGIO STATO COMMAND --------------
+msg_command_status:
+    addi    $sp, $sp, -4
+    sw      $ra, 0($sp)
+
+    lb      $t0, 0($s2)             # carico COMMAND in $t0
+
+    # scritta: command
+    li      $v0, 4
+
+    # verifico se il primo bit    (0)
+    andi    $t1, $t0, 0x01
+    bne     $t1, $zero, msg_command_sirena_non_attiva
+    # sirena attiva
+    li      $v0, 4
+    la      $a0, msg_sirena_attiva
+    syscall
+
+    # verifico se il secondo bit  (1)
+    andi    $t1, $t0, 0x02
+    bne     $t1, $zero, msg_command_acqua_non_attiva
+    # acqua attiva
+    li      $v0, 4
+    la      $a0, msg_acqua_attiva
+    syscall
+
+    # verifico se il terzo bit    (2)
+    andi   $t1, $t0, 0x04
+    bne    $t1, $zero, msg_command_pompieri_non_chiamati
+    # pompieri chiamati
+    li      $v0, 4
+    la      $a0, msg_chiamata_VVFF
+    syscall
+
+    fin_msg_command_status:
+        lw      $ra, 0($sp)     # recupero l'indirizzo di ritorno
+        addi    $sp, $sp, 4     # resetto lo stack
+        jr      $ra             # ritorno al chiamante
+        nop
+
+    msg_command_sirena_non_attiva:
+        li      $v0, 4
+        la      $a0, msg_sirena_disattiva
+        syscall
+        jr      $ra # ritorno al chiamante
+
+    msg_command_acqua_non_attiva:
+        li      $v0, 4
+        la      $a0, msg_sirena_disattiva
+        syscall
+        jr      $ra # ritorno al chiamante
+
+    msg_command_pompieri_non_chiamati:
+        li      $v0, 4
+        la      $a0, msg_VVFF_non_chiamati
+        syscall
+        jr      $ra # ritorno al chiamante
