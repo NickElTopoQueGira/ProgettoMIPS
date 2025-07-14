@@ -73,10 +73,31 @@ main:
     la      $s5, cont_allarm        # carico l'indirizzo del contatore del rest dell'allarme nel registro $s5 
     la      $s6, cont_sensor        # carico l'indirizzo del contatore dei sensori attivi
 
+    # NOTA: 
+    # Ogni 5 secondi (ovvero ogni 5 ripetizioni di main_ciclo) se su command non vine registrato niente
+    # il sistema si resetta
+
+    # Ogni lettura viene intervallata da un secondo
+    # Ad ogni lettura, se il 3 bit di command e' asserito (quello dei VVFF) viene deasserito
+
     main_ciclo:
+        # aspetto un secondo
+        jal     attendi_un_secondo
+
+        # deasserisco il bit della chiamata dei VVFF
+        # dopo un secondo, se e' a 0 rimane a 0
+        jal     smetti_di_chiamare
+
+        # incremento il contatore per il reset
+        jal     agg_cont_reset
+
         # verifica se sussistono le condizioni per il reset
-        jal    verifica_condizioni_reset
+        jal     verifica_condizioni_reset
         
+        # azzero i contatori utilizzati durante la lettura dei valori
+        jal     reset_cont_allarm   
+        jal     reset_cont_sensor
+
         # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
         leggi_temperature:
             move     	$t0, $zero                      # $t0 contatore 
@@ -109,7 +130,7 @@ main:
                 ble     $t3, 0x28, aggiorna_successivo  # se la temperatura e' <= 40 gradi
                                                         # vado al successivo
                 # altrimenti:
-                
+
                 # prima di eseguire il salto, mi salvo sullo stack
                 # i valori dei registri $t0, $t1
                 addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
@@ -134,6 +155,9 @@ main:
                     addi        $t0, 1                  # incremento il contatore di 1
                     addi        $t1, $t1, 4             # vado alla prossima word in memoria
                     j           ciclo_di_lettura        # ritorno al ciclo di lettura
+
+                # condizione x attivare lestrazione ad acqua
+                jal        cond_att_acqua
     
     # fine del programma
     li      $v0, 10     # codice di uscita dal programma
@@ -159,7 +183,7 @@ temp_maggiore:
     # la temperatura e' >= 60
     jal     agg_cont_sensor                 # aggiorno il contatore sensori attivi (temp >= 60)
 
-    # lw      $a0, 0($sp)                     # argomento 0: recupero il valore dell'id del sensore
+    # lw      $a0, 0($sp)                   # argomento 0: recupero il valore dell'id del sensore
     jal     cond_att_acqua                  # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
     
     jal     cond_call_VVFF                  # verifico se ci sono le condizione per chiamare i VVFF
@@ -267,16 +291,16 @@ cond_call_VVFF:
         nop
 
 smetti_di_chiamare:
-    addi        $sp, $sp, -4
-    sw          $ra, 0($sp)
+    addi        $sp, $sp, -4                    # sposto indietro l'indirizzo dello stack pointer
+    sw          $ra, 0($sp)                     # salvo il valore dell'indirizzo di ritorno
 
     jal         is_vvff_call                    # controllo se sono stati chiamati i VVFF
     bne         $v0, $zero, end_chiama_vvff     # $v0 != 0 -> smetti
 
     fin_smetti_di_chiamare:
-        lw          $ra, 0($sp)
-        addi        $sp, $sp, 4
-        jr          $ra
+        lw          $ra, 0($sp)                 # recupero il valore dell'indirizzo di ritorno
+        addi        $sp, $sp, 4                 # resetto lo stack
+        jr          $ra                         # ritorno al chiamante
         nop
 
 
@@ -284,7 +308,7 @@ is_vvff_call:
     # controllo se il terzo bit di COMMAND e' asserito
     lb          $t0, 0($s1)             # carico nel registro $t0 il valore di COMMAND
     
-    andi        $t1, $t0, 0x04          # maschera per isolare il bit
+    andi        $t1, $t0, 0xFB          # maschera per isolare il bit
     srl         $v0, $t1, 2             # shift a dx 
 
     jr          $ra                     # ritorno al chiamante
@@ -293,7 +317,7 @@ is_vvff_call:
 # -------------- AZZERA --------------
 verifica_condizioni_reset:
     # verifico se sono passati 5 secondi
-    lw      $t0, 0($s4)
+    lw      $t0, 0($s4)                 # carico in $t0 il valore del contatore x il reset
     blt     $t0, 0x5, fin_verifica      # $t0 < 5 -> fine verifica
     # verifico se COMMAND e' tutto a zero
     lb      $t1, 0($s1)                 # carico COMMAND in $t1
@@ -311,6 +335,7 @@ _rest:
     jal     reset_cont_reset
     jal     reset_cont_allarm
     jal     reset_cont_sensor
+    jal     reset_record
     jr      $ra
     nop
 
@@ -336,6 +361,13 @@ attendi_un_secondo:
         addi    $sp, $sp, 4         # rest dello stack
         jr      $ra                 # ritorno al chiamante
         nop
+
+# -------------- AGGIORNAMENTO CONTATORI --------------
+reset_record:
+    lw      $t0, 0($s3)     # carico RECORD in $t0
+    move    $t0, $zero      # azzero
+    sw      $t0, 0($s3)     # salvo il nuovo valore
+    jr      $ra             # ritorno al chiamante
 
 # -------------- AGGIORNAMENTO CONTATORI --------------
 
@@ -464,9 +496,9 @@ end_chiama_vvff:
 # -------------- MESSAGGIO TEMPERATURA SENSORE --------------
 msg_temperatura_sensore:
     addi    $sp, $sp, -12
-    lw      $a0, 0($sp)     # salvo: id del sensore
-    lw      $a1, 4($sp)     # salvo: valore del sensore
-    lw      $ra, 8($sp)     # salvo: valore dell'indirizzo di ritorno
+    sw      $a0, 0($sp)     # salvo: id del sensore
+    sw      $a1, 4($sp)     # salvo: valore del sensore
+    sw      $ra, 8($sp)     # salvo: valore dell'indirizzo di ritorno
 
     lw      $t0, 0($sp)     # recupero id del sensore
     lw      $t1, 4($sp)     # recupero valore del sensore
@@ -513,7 +545,7 @@ msg_command_status:
     addi    $sp, $sp, -4
     sw      $ra, 0($sp)
 
-    lb      $t0, 0($s2)             # carico COMMAND in $t0
+    lb      $t0, 0($s1)             # carico COMMAND in $t0
 
     # scritta: command
     li      $v0, 4
