@@ -1,5 +1,6 @@
 .data
 # 'spazi' di memoria 
+.align 2
 ALLARMS:        .word 0x0000A7F1    # Sensore 0  : 01
                                     # Sensore 1  : 00
                                     # Sensore 2  : 11
@@ -17,8 +18,10 @@ ALLARMS:        .word 0x0000A7F1    # Sensore 0  : 01
                                     # Sensore 14 : 10
                                     # Sensore 15 : 00
 
+.align 0
 COMMAND:        .byte 0     
 
+.align 2
 TEMPERATURE:    .word 0x00000046    # Sensore 0: ID=0, temp=70°C (>60 e fumo)
                 .word 0x00010041    # Sensore 1: ID=1, temp=65°C (>60)
                 .word 0x0002005A    # Sensore 2: ID=2, temp=90°C (>60 e fumo)
@@ -36,9 +39,11 @@ TEMPERATURE:    .word 0x00000046    # Sensore 0: ID=0, temp=70°C (>60 e fumo)
                 .word 0x000E004B    # Sensore 14: ID=14, temp=75°C (>60)
                 .word 0x000F0023    # Sensore 15: ID=15, temp=35°C (<40)
 
+.align 2
 RECORD:         .space 32   
 
 # contatori
+.align 2
 cont_reset:     .word 0     # contatore per il reset
 cont_allarm:    .word 0     # contatore per la sirena
 cont_sensor:    .word 0     # contatore sensori attivi
@@ -100,12 +105,17 @@ main:
 
         # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
         leggi_temperature:
-            move     	$t0, $zero                      # $t0 contatore 
-            move        $t1, $s2                        # copia temporanea di $s2
-            
             # messaggio sulla console sullo status di COMMAND
             jal         msg_command_status              # status di command sulla console
             
+            move     	$t0, $zero                      # $t0 contatore 
+            move        $t1, $s2                        # copia temporanea di $s2
+            
+            # mi salvo sullo stack i valori dei registri $t0, $t1
+            addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
+            sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
+            sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
+
             ciclo_di_lettura:
                 bge         $t0, 16, main_ciclo         # controllo se ho letto tutto lo spazio di memoria
                                                         # 16 = 64Byte / 4Byte 
@@ -114,7 +124,8 @@ main:
                 # $t2 -> senosre (1 word = (2Byte + 2Byte)) 
                 # $t3 -> numero del sensore (parte sx della word, 2Byte)
                 # $t4 -> valore del sensore (parte dx della word, 2Byte)
-
+                lw          $t1, 0($sp)                 # recupero il valore di $t1 dallo stack
+                lw          $t0, 4($sp)                 # recupero il valore di $t0 dallo stack
                 lw          $t2, 0($t1)                 # carico in $t2 il valore della word corrente
                 
                 # faccio i controlli
@@ -131,12 +142,6 @@ main:
                                                         # vado al successivo
                 # altrimenti:
 
-                # prima di eseguire il salto, mi salvo sullo stack
-                # i valori dei registri $t0, $t1
-                addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
-                sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
-                sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
-
                 # comunico sulla console il valore del sensore ed 
                 # eseguo il salto se la temperatura e' maggiore di 40
                 srl     $a0, $t2, 16                    # argomento 0: id del sensore
@@ -145,13 +150,12 @@ main:
                 move    $a2, $t0                        # argomento 2: valore del contatore
                 jal     temp_maggiore                   # la temperatura e' > 40 gradi
 
-                # recupero i valori salvati in precedenza nello stack (dopo il salto)
-                lw          $t0, 4($sp)                 # recupero il valode del contatore
-                lw          $t1, 0($sp)                 # recupero il valode di $t1 prima del salto
-                addi        $sp, $sp, 8                 # ripristino lo stack
-
                 # aggiornamento del contatore e calcolo dell'indirizzo successivo da leggere
                 aggiorna_successivo:
+                    # recupero i valori salvati in precedenza nello stack (dopo il salto)
+                    lw          $t0, 4($sp)                 # recupero il valode del contatore
+                    lw          $t1, 0($sp)                 # recupero il valode di $t1 prima del salto
+                    addi        $sp, $sp, 8                 # ripristino lo stack
                     addi        $t0, 1                  # incremento il contatore di 1
                     addi        $t1, $t1, 4             # vado alla prossima word in memoria
                     j           ciclo_di_lettura        # ritorno al ciclo di lettura
@@ -344,7 +348,7 @@ attendi_un_secondo:
     addi    $sp, $sp, -4            # sposto indietro lo stak pointer di 4
     sw      $ra, 0($sp)             # salvo: indirizzo al quale tornare
 
-    li      $t0, $zero              # Inizializzo un contatore temporaneo
+    move    $t0, $zero              # Inizializzo un contatore temporaneo
 
     # N di clicli da fare:
     # dal momento che addi e' un operazione I-Type impiega 4 operazioni
@@ -471,6 +475,7 @@ disattiva_acqua:
     # messaggio sulla console
     li      $v0, 4
     la      $a0, msg_acqua_disattiva
+    syscall
     jr      $ra                     # ritorno al chiamante
     nop
 
@@ -490,9 +495,12 @@ end_chiama_vvff:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del terzo bit di COMMADN
     andi    $t9, $t9, 0xFB          # deasserisco il bit con la maschera 0xFB
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
+    # messaggio sulla console
+    li      $v0, 4
+    la      $a0, msg_VVFF_non_chiamati
+    syscall
     jr      $ra                     # ritorno al chiamante
     nop
-
 # -------------- MESSAGGIO TEMPERATURA SENSORE --------------
 msg_temperatura_sensore:
     addi    $sp, $sp, -12
@@ -517,7 +525,6 @@ msg_temperatura_sensore:
     li      $v0, 1
     move    $a0, $t0
     syscall
-
     # scritta: Valore
     li      $v0, 4
     la      $a0, msg_valore
@@ -536,7 +543,7 @@ msg_temperatura_sensore:
 
     fin_msg_temperatura_sensore:
         lw      $ra, 8($sp)     # recupero il valore dell'indirizzo di ritorno
-        addi    $sp, $sp, 8     # resetto lo stack
+        addi    $sp, $sp, 12    # resetto lo stack (corretto da 8 a 12)
         jr      $ra             # ritorno al chiamante
         nop
 
@@ -549,51 +556,55 @@ msg_command_status:
 
     # scritta: command
     li      $v0, 4
+    la      $a0, msg_command
+    syscall
 
     # verifico se il primo bit    (0)
     andi    $t1, $t0, 0x01
-    bne     $t1, $zero, msg_command_sirena_non_attiva
+    beq     $t1, $zero, stampa_sirena_non_attiva
     # sirena attiva
     li      $v0, 4
     la      $a0, msg_sirena_attiva
     syscall
 
-    # verifico se il secondo bit  (1)
-    andi    $t1, $t0, 0x02
-    bne     $t1, $zero, msg_command_acqua_non_attiva
-    # acqua attiva
-    li      $v0, 4
-    la      $a0, msg_acqua_attiva
-    syscall
+    j dopo_sirena
+    
+    stampa_sirena_non_attiva:
+        li      $v0, 4
+        la      $a0, msg_sirena_disattiva
+        syscall
 
-    # verifico se il terzo bit    (2)
-    andi   $t1, $t0, 0x04
-    bne    $t1, $zero, msg_command_pompieri_non_chiamati
-    # pompieri chiamati
-    li      $v0, 4
-    la      $a0, msg_chiamata_VVFF
-    syscall
+    dopo_sirena:
+        # verifico se il secondo bit  (1)
+        andi    $t1, $t0, 0x02
+        beq     $t1, $zero, stampa_acqua_non_attiva
+        # acqua attiva
+        li      $v0, 4
+        la      $a0, msg_acqua_attiva
+        syscall
+        j       dopo_acqua
+
+    stampa_acqua_non_attiva:
+        li      $v0, 4
+        la      $a0, msg_acqua_disattiva
+        syscall
+
+    dopo_acqua:
+        # verifico se il terzo bit    (2)
+        andi   $t1, $t0, 0x04
+        beq    $t1, $zero, stampa_pompieri_non_chiamati
+        # pompieri chiamati
+        li      $v0, 4
+        la      $a0, msg_chiamata_VVFF
+        syscall
+
+    stampa_pompieri_non_chiamati:
+        li      $v0, 4
+        la      $a0, msg_VVFF_non_chiamati
+        syscall
 
     fin_msg_command_status:
         lw      $ra, 0($sp)     # recupero l'indirizzo di ritorno
         addi    $sp, $sp, 4     # resetto lo stack
         jr      $ra             # ritorno al chiamante
         nop
-
-    msg_command_sirena_non_attiva:
-        li      $v0, 4
-        la      $a0, msg_sirena_disattiva
-        syscall
-        jr      $ra # ritorno al chiamante
-
-    msg_command_acqua_non_attiva:
-        li      $v0, 4
-        la      $a0, msg_sirena_disattiva
-        syscall
-        jr      $ra # ritorno al chiamante
-
-    msg_command_pompieri_non_chiamati:
-        li      $v0, 4
-        la      $a0, msg_VVFF_non_chiamati
-        syscall
-        jr      $ra # ritorno al chiamante
