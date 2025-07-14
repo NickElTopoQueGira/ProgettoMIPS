@@ -1,29 +1,27 @@
 .data
 # 'spazi' di memoria 
-ALLARMS:        .word 0     # definisco lo spazio di 'ALLARMS'
-                            # 1na word perche' ogni sensore ha 
-                            # bisogno di 2 bit * 16 sensori 
-                            # (16 numero max di sensori) = 
-                            # 32 bit = 4 byte = 1 word.
-                            # Inizializzo la word a 0
+ALLARMS:        .word 0x0000A7F1
 
-COMMAND:        .byte 0     # definisco lo spazio di 'COMMAND'
-                            # lo definisco come byte perche' a me
-                            # (da specifica) servono solo 3 bit.
-                            # Inizializzo tutto il byte a 0
+COMMAND:        .byte 0     
 
-TEMPERATURE:    .space 64   # definisco lo spazio di 'TEMPERATURE'
-                            # dal momento che per ogni sensore vengono
-                            # utilizzati 2 Byte per il suo numero identificativo
-                            # 2 Byte per il suo valore
-                            # allora (2Byte + 2Byte) * 16 sensori = 64Byte
-                            # Lo spazio NON vine inizializzato
+TEMPERATURE:    .word 0x00000046    # Sensore 0: ID=0, temp=70°C (>60 e fumo)
+                .word 0x00010041    # Sensore 1: ID=1, temp=65°C (>60)
+                .word 0x0002005A    # Sensore 2: ID=2, temp=90°C (>60 e fumo)
+                .word 0x00030032    # Sensore 3: ID=3, temp=50°C (>40)
+                .word 0x00040028    # Sensore 4: ID=4, temp=40°C (soglia)
+                .word 0x0005001E    # Sensore 5: ID=5, temp=30°C (<40)
+                .word 0x00060046    # Sensore 6: ID=6, temp=70°C (>60)
+                .word 0x00070000    # Sensore 7: ID=7, temp=0°C (disabilitato)
+                .word 0x0008005F    # Sensore 8: ID=8, temp=95°C (>60)
+                .word 0x0009003C    # Sensore 9: ID=9, temp=60°C (soglia)
+                .word 0x000A002D    # Sensore 10: ID=10, temp=45°C (>40)
+                .word 0x000B0037    # Sensore 11: ID=11, temp=55°C (>40)
+                .word 0x000C006E    # Sensore 12: ID=12, temp=110°C (>60 e fumo)
+                .word 0x000D0019    # Sensore 13: ID=13, temp=25°C (<40)
+                .word 0x000E004B    # Sensore 14: ID=14, temp=75°C (>60)
+                .word 0x000F0023    # Sensore 15: ID=15, temp=35°C (<40)
 
-RECORD:         .space 32   # definisco lo spazio di 'RECORD'
-                            # ogni sensore e' rappresentato solo dal suo id 
-                            # il quale pesa 2 Byte
-                            # e quindi 2Byte * 16sensori = 32Byte.
-                            # Lo spazio NON viene inizializzato
+RECORD:         .space 32   
 
 # contatori
 cont_reset:     .word 0     # contatore per il reset
@@ -47,60 +45,61 @@ main:
     la      $s5, cont_allarm        # carico l'indirizzo del contatore del rest dell'allarme nel registro $s5 
     la      $s6, cont_sensor        # carico l'indirizzo del contatore dei sensori attivi
 
-    # verifica se sussistono le condizioni per il reset
-    jal    verifica_condizioni_reset
-    
-    # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
-    leggi_temperature:
-        move     	$t0, $zero              # $t0 contatore 
-        move        $t1, $s2                # copia temporanea di $s2
-        ciclo_di_lettura:
-            bge         $t0, 16, main               # controllo se ho letto tutto lo spazio di memoria
-                                                    # 16 = 64Byte / 4Byte 
-                                                    # quando arrivo al limite massimo, rincomincio da 0
-            
-            # $t2 -> senosre (1 word = (2Byte + 2Byte)) 
-            # $t3 -> numero del sensore (parte sx della word, 2Byte)
-            # $t4 -> valore del sensore (parte dx della word, 2Byte)
+    main_ciclo:
+        # verifica se sussistono le condizioni per il reset
+        jal    verifica_condizioni_reset
+        
+        # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
+        leggi_temperature:
+            move     	$t0, $zero                      # $t0 contatore 
+            move        $t1, $s2                        # copia temporanea di $s2
+            ciclo_di_lettura:
+                bge         $t0, 16, main_ciclo         # controllo se ho letto tutto lo spazio di memoria
+                                                        # 16 = 64Byte / 4Byte 
+                                                        # quando arrivo al limite massimo, rincomincio da 0
+                
+                # $t2 -> senosre (1 word = (2Byte + 2Byte)) 
+                # $t3 -> numero del sensore (parte sx della word, 2Byte)
+                # $t4 -> valore del sensore (parte dx della word, 2Byte)
 
-            lw          $t2, 0($t1)                 # carico in $t2 il valore della word corrente
-            
-            # faccio i controlli
+                lw          $t2, 0($t1)                 # carico in $t2 il valore della word corrente
+                
+                # faccio i controlli
 
-            # controllo se esistono le condizioni x l'attivazione della sirena 
-            srl     $a0, $t2, 16                    # argomento 0: id del sensore corrente
-            jal     attiva_sirena                   # verifico se ci sono le condizioni necessarie per attivare
-                                                    # la sirena. NON E' necessario che la temperatura sia superiore 
-                                                    # ai 40 gradi.
+                # controllo se esistono le condizioni x l'attivazione della sirena 
+                srl     $a0, $t2, 16                    # argomento 0: id del sensore corrente
+                jal     attiva_sirena                   # verifico se ci sono le condizioni necessarie per attivare
+                                                        # la sirena. NON E' necessario che la temperatura sia superiore 
+                                                        # ai 40 gradi.
 
-            # se la temperatura e' minore di 40gradi
-            andi    $t3, $t2, 0xFFFF
-            ble     $t3, 0x28, aggiorna_successivo  # se la temperatura e' <= 40 gradi
-                                                    # vado al successivo
-            # altrimenti:
-            
-            # prima di eseguire il salto, mi salvo sullo stack
-            # i valori dei registri $t0, $t1
-            addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
-            sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
-            sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
+                # se la temperatura e' minore di 40gradi
+                andi    $t3, $t2, 0xFFFF
+                ble     $t3, 0x28, aggiorna_successivo  # se la temperatura e' <= 40 gradi
+                                                        # vado al successivo
+                # altrimenti:
+                
+                # prima di eseguire il salto, mi salvo sullo stack
+                # i valori dei registri $t0, $t1
+                addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
+                sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
+                sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
 
-            # eseguo il salto se la temperatura e' maggiore di 40
-            srl     $a0, $t2, 16                    # argomento 0: id del sensore
-            andi    $a1, $t2, 0xFFFF                # argomento 1: valore del sensore
-            move    $a2, $t0                        # argomento 2: valore del contatore
-            jal     temp_maggiore                   # la temperatura e' > 40 gradi
+                # eseguo il salto se la temperatura e' maggiore di 40
+                srl     $a0, $t2, 16                    # argomento 0: id del sensore
+                andi    $a1, $t2, 0xFFFF                # argomento 1: valore del sensore
+                move    $a2, $t0                        # argomento 2: valore del contatore
+                jal     temp_maggiore                   # la temperatura e' > 40 gradi
 
-            # recupero i valori salvati in precedenza nello stack (dopo il salto)
-            lw          $t0, 4($sp)             # recupero il valode del contatore
-            lw          $t1, 0($sp)             # recupero il valode di $t1 prima del salto
-            addi        $sp, $sp, 8             # ripristino lo stack
+                # recupero i valori salvati in precedenza nello stack (dopo il salto)
+                lw          $t0, 4($sp)                 # recupero il valode del contatore
+                lw          $t1, 0($sp)                 # recupero il valode di $t1 prima del salto
+                addi        $sp, $sp, 8                 # ripristino lo stack
 
-            # aggiornamento del contatore e calcolo dell'indirizzo successivo da leggere
-            aggiorna_successivo:
-                addi        $t0, 1                  # incremento il contatore di 1
-                addi        $t1, $t1, 4             # vado alla prossima word in memoria
-                j           ciclo_di_lettura        # ritorno al ciclo di lettura
+                # aggiornamento del contatore e calcolo dell'indirizzo successivo da leggere
+                aggiorna_successivo:
+                    addi        $t0, 1                  # incremento il contatore di 1
+                    addi        $t1, $t1, 4             # vado alla prossima word in memoria
+                    j           ciclo_di_lettura        # ritorno al ciclo di lettura
     
     # fine del programma
     li      $v0, 10     # codice di uscita dal programma
@@ -234,11 +233,17 @@ cond_call_VVFF:
         nop
 
 smetti_di_chiamare:
-    # controllo se sono stati chiamati i VVFF
-    jal         is_vvff_call
-    li          $v0, 0x1, end_chiama_vvff       # se sono gia' stati chiamatai si smette di chiamare
-    jr          $ra                             # ritorno al chiamante    
-    nop
+    addi        $sp, $sp, -4
+    sw          $ra, 0($sp)
+
+    jal         is_vvff_call                    # controllo se sono stati chiamati i VVFF
+    bne         $v0, $zero, end_chiama_vvff     # $v0 != 0 -> smetti
+
+    fin_smetti_di_chiamare:
+        lw          $ra, 0($sp)
+        addi        $sp, $sp, 4
+        jr          $ra
+        nop
 
 
 is_vvff_call:
