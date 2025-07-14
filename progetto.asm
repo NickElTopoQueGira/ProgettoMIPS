@@ -44,15 +44,15 @@ cont_allarm:    .word 0     # contatore per la sirena
 cont_sensor:    .word 0     # contatore sensori attivi
 
 # messaggi
-msg_sirena_attiva       .asciiz "Sirena attiva\n"
-msg_sirena_disattiva    .asciiz "Sirena spenta\n"
-msg_acqua_attiva        .asciiz "Acqua attiva\n"
-msg_acqua_disattiva     .asciiz "Acqua spenta\n"
-msg_chiamata_VVFF       .asciiz "Chiamata VVFF\n"
-msg_temperatura         .asciiz "Temperatura sensore:  "
-msg_id                  .asciiz "Id sensore: "
-msg_valore              .asciiz "Valore sensore: "
-msg_acapo               .asciiz "\n"
+msg_sirena_attiva:       .asciiz "Sirena attiva\n"
+msg_sirena_disattiva:    .asciiz "Sirena spenta\n"
+msg_acqua_attiva:        .asciiz "Acqua attiva\n"
+msg_acqua_disattiva:     .asciiz "Acqua spenta\n"
+msg_chiamata_VVFF:       .asciiz "Chiamata VVFF\n"
+msg_temperatura:         .asciiz "Temperatura sensore:  "
+msg_id:                  .asciiz "Id sensore: "
+msg_valore:              .asciiz "Valore sensore: "
+msg_acapo:               .asciiz "\n"
 
 .text
 .globl main
