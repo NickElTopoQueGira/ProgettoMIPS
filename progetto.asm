@@ -1,6 +1,21 @@
 .data
 # 'spazi' di memoria 
-ALLARMS:        .word 0x0000A7F1
+ALLARMS:        .word 0x0000A7F1    # Sensore 0  : 01
+                                    # Sensore 1  : 00
+                                    # Sensore 2  : 11
+                                    # Sensore 3  : 11
+                                    # Sensore 4  : 11
+                                    # Sensore 5  : 11
+                                    # Sensore 6  : 11
+                                    # Sensore 7  : 00
+                                    # Sensore 8  : 10
+                                    # Sensore 9  : 10
+                                    # Sensore 10 : 10
+                                    # Sensore 11 : 10
+                                    # Sensore 12 : 00
+                                    # Sensore 13 : 10
+                                    # Sensore 14 : 10
+                                    # Sensore 15 : 00
 
 COMMAND:        .byte 0     
 
@@ -27,6 +42,17 @@ RECORD:         .space 32
 cont_reset:     .word 0     # contatore per il reset
 cont_allarm:    .word 0     # contatore per la sirena
 cont_sensor:    .word 0     # contatore sensori attivi
+
+# messaggi
+msg_sirena_attiva       .asciiz "Sirena attiva\n"
+msg_sirena_disattiva    .asciiz "Sirena spenta\n"
+msg_acqua_attiva        .asciiz "Acqua attiva\n"
+msg_acqua_disattiva     .asciiz "Acqua spenta\n"
+msg_chiamata_VVFF       .asciiz "Chiamata VVFF\n"
+msg_temperatura         .asciiz "Temperatura sensore:  "
+msg_id                  .asciiz "Id sensore: "
+msg_valore              .asciiz "Valore sensore: "
+msg_acapo               .asciiz "\n"
 
 .text
 .globl main
@@ -84,9 +110,11 @@ main:
                 sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
                 sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
 
+                # comunico sulla console il valore del sensore ed 
                 # eseguo il salto se la temperatura e' maggiore di 40
                 srl     $a0, $t2, 16                    # argomento 0: id del sensore
                 andi    $a1, $t2, 0xFFFF                # argomento 1: valore del sensore
+                jal     msg_temperatura_sensore         # messaggio sulla console
                 move    $a2, $t0                        # argomento 2: valore del contatore
                 jal     temp_maggiore                   # la temperatura e' > 40 gradi
 
@@ -343,6 +371,10 @@ attiva_sirena:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del primo bit di COMMAND
     ori     $t9, $t9, 0x01          # asserisco il bit
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
+    # messaggio sulla console
+    li      $v0, 4
+    la      $a0, msg_sirena_attiva
+    syscall
     jr      $ra                     # ritorno al chiamante
     nop
 
@@ -351,6 +383,10 @@ disattiva_sirena:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del primo bit di COMMAND
     andi    $t9, $t9, 0xFE          # deasserisco il bit con la maschera 0XFE
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
+    # messaggio sulla console
+    li      $v0, 4
+    la      $a0, msg_sirena_disattiva
+    syscall    
     jr      $ra                     # ritorno al chiamante
     nop
 
@@ -359,6 +395,10 @@ attiva_acqua:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del secondo bit di COMMAND
     ori     $t9, $t9, 0x02          # asserisco il bit
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
+    # messaggio sulla console
+    li      $v0, 4
+    la      $a0, msg_acqua_attiva
+    syscall
     jr      $ra                     # ritorno al chiamante
     nop
 
@@ -367,6 +407,9 @@ disattiva_acqua:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del secondo bit di COMMAND
     andi    $t9, $t9, 0xFD          # deasserisco il bit con la maschera 0xFD
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
+    # messaggio sulla console
+    li      $v0, 4
+    la      $a0, msg_acqua_disattiva
     jr      $ra                     # ritorno al chiamante
     nop
 
@@ -375,6 +418,9 @@ chiama_vvff:
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del terzo bit di COMMADN
     ori     $t9, $t9, 0x04          # asserisco il bit
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
+    # messaggio sulla console
+    li      $v0, 4
+    la      $a0, msg_chiamata_VVFF
     jr      $ra                     # ritorno al chiamante
     nop
 
@@ -384,4 +430,48 @@ end_chiama_vvff:
     andi    $t9, $t9, 0xFB          # deasserisco il bit con la maschera 0xFB
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
     jr      $ra                     # ritorno al chiamante
+    nop
+
+# -------------- MESSAGGIO TEMPERATURA SENSORE --------------
+msg_temperatura_sensore:
+    addi    $sp, $sp, -12
+    lw      $a0, 0($sp)     # salvo: id del sensore
+    lw      $a1, 4($sp)     # salvo: valore del sensore
+    lw      $ra, 8($sp)
+
+    # scritta: Temperatura sensore
+    li      $v0, 4
+    li      $a0, msg_temperatura
+    syscall
+
+    # scritta: Id
+    li      $v0, 4
+    li      $a0, msg_id
+    syscall
+
+    # id del sensore
+    li      $v0, 1
+    lw      $t0, 0($sp)
+    move    $a0, $t0
+    syscall
+
+    # scritta: Valore
+    li      $v0, 4
+    li      $a0, msg_valore
+    syscall
+
+    # valore del sensore
+    li      $v0, 1
+    lw      $t0, 4($sp)
+    move    $a0, $t0
+    syscall
+
+    # scritta: \n
+    li      $v0, 4
+    li      $a0, msg_acapo
+    syscall
+
+    lw      $ra, 8($sp)
+    addi    $sp, $sp, 8
+    jr      $ra
     nop
