@@ -47,9 +47,9 @@ main:
     la      $s5, cont_allarm        # carico l'indirizzo del contatore del rest dell'allarme nel registro $s5 
     la      $s6, cont_sensor        # carico l'indirizzo del contatore dei sensori attivi
 
-    # reset
-    jal     azzera                  # aggiorno tutti i contatori e command
-
+    # verifica se sussistono le condizioni per il reset
+    jal    verifica_condizioni_reset
+    
     # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
     leggi_temperature:
         move     	$t0, $zero              # $t0 contatore 
@@ -233,6 +233,13 @@ cond_call_VVFF:
         jr          $ra                         # ritorno al chiamante
         nop
 
+smetti_di_chiamare:
+    # controllo se sono stati chiamati i VVFF
+    jal         is_vvff_call
+    li          $v0, 0x1, end_chiama_vvff       # se sono gia' stati chiamatai si smette di chiamare
+    jr          $ra                             # ritorno al chiamante    
+    nop
+
 
 is_vvff_call:
     # controllo se il terzo bit di COMMAND e' asserito
@@ -245,19 +252,27 @@ is_vvff_call:
     nop
 
 # -------------- AZZERA --------------
-azzera:
-    # azzeramento dei contatori
+verifica_condizioni_reset:
+    # verifico se sono passati 5 secondi
+    lw      $t0, 0($s4)
+    blt     $t0, 0x5, fin_verifica      # $t0 < 5 -> fine verifica
+    # verifico se COMMAND e' tutto a zero
+    lb      $t1, 0($s1)                 # carico COMMAND in $t1
+    andi    $t1, $t1, 0xFF              # $t1 = COMMAND andi 0xFF
+    beq     $t1, $zero, _rest           # se COMMAND e' a zero resetto 
+    # si 'COMMAND' est different de zero, je passe a la fin de la 
+    # verification parce qu'il y a encore un evenement en cours
 
-    jal reset_cont_reset
-    jal reset_cont_allarm
-    jal reset_cont_sensor
+    fin_verifica:
+        jr      $ra                     # ritonro al chiamante
+        nop
 
-    # azzeramento command
-    jal disattiva_sirena
-    jal disattiva_acqua
-    jal end_chiama_vvff
-
-    jr      $ra                     # ritonro al chiamante
+_rest:
+    # faccio il reset dei contatori
+    jal     reset_cont_reset
+    jal     reset_cont_allarm
+    jal     reset_cont_sensor
+    jr      $ra
     nop
 
 # -------------- AGGIORNAMENTO CONTATORI --------------
