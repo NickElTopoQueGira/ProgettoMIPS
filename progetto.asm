@@ -1,7 +1,8 @@
 .data
 # 'spazi' di memoria 
 .align 2
-ALLARMS:        .word 0x0000A7F1    # Sensore 0  : 01
+ALLARMS:        .word   0x0000A7F1
+# Sensore 0  : 01
                                     # Sensore 1  : 00
                                     # Sensore 2  : 11
                                     # Sensore 3  : 11
@@ -14,30 +15,30 @@ ALLARMS:        .word 0x0000A7F1    # Sensore 0  : 01
                                     # Sensore 10 : 10
                                     # Sensore 11 : 10
                                     # Sensore 12 : 00
-                                    # Sensore 13 : 10
-                                    # Sensore 14 : 10
+                                    # Sensore 13 : 00
+                                    # Sensore 14 : 00
                                     # Sensore 15 : 00
 
 .align 0
 COMMAND:        .byte 0     
 
 .align 2
-TEMPERATURE:    .word 0x00000046    # Sensore 0: ID=0, temp=70°C (>60 e fumo)
-                .word 0x00010041    # Sensore 1: ID=1, temp=65°C (>60)
-                .word 0x0002005A    # Sensore 2: ID=2, temp=90°C (>60 e fumo)
-                .word 0x00030032    # Sensore 3: ID=3, temp=50°C (>40)
-                .word 0x00040028    # Sensore 4: ID=4, temp=40°C (soglia)
-                .word 0x0005001E    # Sensore 5: ID=5, temp=30°C (<40)
-                .word 0x00060046    # Sensore 6: ID=6, temp=70°C (>60)
-                .word 0x00070000    # Sensore 7: ID=7, temp=0°C (disabilitato)
-                .word 0x0008005F    # Sensore 8: ID=8, temp=95°C (>60)
-                .word 0x0009003C    # Sensore 9: ID=9, temp=60°C (soglia)
-                .word 0x000A002D    # Sensore 10: ID=10, temp=45°C (>40)
-                .word 0x000B0037    # Sensore 11: ID=11, temp=55°C (>40)
-                .word 0x000C006E    # Sensore 12: ID=12, temp=110°C (>60 e fumo)
-                .word 0x000D0019    # Sensore 13: ID=13, temp=25°C (<40)
-                .word 0x000E004B    # Sensore 14: ID=14, temp=75°C (>60)
-                .word 0x000F0023    # Sensore 15: ID=15, temp=35°C (<40)
+TEMPERATURE:    .word 0x00000046    # Sensore 0  : ID=0, temp=70°C (>60 e fumo)
+                .word 0x00010041    # Sensore 1  : ID=1, temp=65°C (>60)
+                .word 0x0002005A    # Sensore 2  : ID=2, temp=90°C (>60 e fumo)
+                .word 0x00030032    # Sensore 3  : ID=3, temp=50°C (>40)
+                .word 0x00040028    # Sensore 4  : ID=4, temp=40°C (soglia)
+                .word 0x0005001E    # Sensore 5  : ID=5, temp=30°C (<40)
+                .word 0x00060046    # Sensore 6  : ID=6, temp=70°C (>60)
+                .word 0x00070000    # Sensore 7  : ID=7, temp=0°C (disabilitato)
+                .word 0x0008005F    # Sensore 8  : ID=8, temp=95°C (>60)
+                .word 0x0009003C    # Sensore 9  : ID=9, temp=60°C (soglia)
+                .word 0x000A002D    # Sensore 10 : ID=10, temp=45°C (>40)
+                .word 0x000B0037    # Sensore 11 : ID=11, temp=55°C (>40)
+                .word 0x000C006E    # Sensore 12 : ID=12, temp=110°C (>60 e fumo)
+                .word 0x000D0019    # Sensore 13 : ID=13, temp=25°C (<40)
+                .word 0x000E004B    # Sensore 14 : ID=14, temp=75°C (>60)
+                .word 0x000F0023    # Sensore 15 : ID=15, temp=35°C (<40)
 
 .align 2
 RECORD:         .space 32   
@@ -77,7 +78,10 @@ main:
     la      $s4, cont_reset         # carico l'indirizzo del contatore del reset nel registro $s4
     la      $s5, cont_allarm        # carico l'indirizzo del contatore del rest dell'allarme nel registro $s5 
     la      $s6, cont_sensor        # carico l'indirizzo del contatore dei sensori attivi
-
+    
+    # stack
+    addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
+    
     # NOTA: 
     # Ogni 5 secondi (ovvero ogni 5 ripetizioni di main_ciclo) se su command non vine registrato niente
     # il sistema si resetta
@@ -103,30 +107,31 @@ main:
         jal     reset_cont_allarm   
         jal     reset_cont_sensor
 
+
         # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
-        leggi_temperature:
-            # messaggio sulla console sullo status di COMMAND
-            jal         msg_command_status              # status di command sulla console
-            
+        leggi_temperature:            
             move     	$t0, $zero                      # $t0 contatore 
             move        $t1, $s2                        # copia temporanea di $s2
             
-            # mi salvo sullo stack i valori dei registri $t0, $t1
-            addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
-            sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
-            sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
-
             ciclo_di_lettura:
                 bge         $t0, 16, main_ciclo         # controllo se ho letto tutto lo spazio di memoria
                                                         # 16 = 64Byte / 4Byte 
                                                         # quando arrivo al limite massimo, rincomincio da 0
                 
-                # $t2 -> senosre (1 word = (2Byte + 2Byte)) 
-                # $t3 -> numero del sensore (parte sx della word, 2Byte)
-                # $t4 -> valore del sensore (parte dx della word, 2Byte)
+                # mi salvo sullo stack i valori dei registri $t0, $t1
+                sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
+                sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
+                
+                # messaggio sulla console sullo status di COMMAND
+                move        $a0, $t0
+                jal         msg_command_status          # status di command sulla console
+                
+                # senosre (1 word = (2Byte + 2Byte)) 
+                # numero del sensore (parte sx della word, 2Byte)
+                # valore del sensore (parte dx della word, 2Byte)
                 lw          $t1, 0($sp)                 # recupero il valore di $t1 dallo stack
                 lw          $t0, 4($sp)                 # recupero il valore di $t0 dallo stack
-                lw          $t2, 0($t1)                 # carico in $t2 il valore della word corrente
+                lw          $t2, 0($t1)                 # carico in $t2 il valore della word corrente (errore)
                 
                 # faccio i controlli
 
@@ -155,16 +160,17 @@ main:
                     # recupero i valori salvati in precedenza nello stack (dopo il salto)
                     lw          $t0, 4($sp)                 # recupero il valode del contatore
                     lw          $t1, 0($sp)                 # recupero il valode di $t1 prima del salto
-                    addi        $sp, $sp, 8                 # ripristino lo stack
-                    addi        $t0, 1                  # incremento il contatore di 1
+                    addi        $t0, $t0,1                  # incremento il contatore di 1
                     addi        $t1, $t1, 4             # vado alla prossima word in memoria
                     j           ciclo_di_lettura        # ritorno al ciclo di lettura
 
                 # condizione x attivare lestrazione ad acqua
                 jal        cond_att_acqua
+
     
     # fine del programma
-    li      $v0, 10     # codice di uscita dal programma
+    addi    $sp, $sp, 8     # ripristino lo stack
+    li      $v0, 10         # codice di uscita dal programma
     syscall
 
 # -------------- TEMPERATURA MAGGIORE DI 40 GRADI --------------
@@ -553,6 +559,12 @@ msg_command_status:
     sw      $ra, 0($sp)
 
     lb      $t0, 0($s1)             # carico COMMAND in $t0
+
+    # stampo il contatore:
+    move    $t2, $a0                # recupero l'argometno e lo metto in $t2
+    li      $v0, 1
+    move    $a0, $t2
+    syscall
 
     # scritta: command
     li      $v0, 4
