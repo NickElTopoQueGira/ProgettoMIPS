@@ -97,11 +97,12 @@ main:
         # dopo un secondo, se e' a 0 rimane a 0
         jal     smetti_di_chiamare
 
+        # verifica se sussistono le condizioni per il reset
+        jal     verifica_condizioni_reset
+        
         # incremento il contatore per il reset
         jal     agg_cont_reset
 
-        # verifica se sussistono le condizioni per il reset
-        jal     verifica_condizioni_reset
         
         # azzero i contatori utilizzati durante la lettura dei valori
         jal     reset_cont_allarm   
@@ -332,7 +333,7 @@ verifica_condizioni_reset:
     # verifico se COMMAND e' tutto a zero
     lb      $t1, 0($s1)                 # carico COMMAND in $t1
     andi    $t1, $t1, 0xFF              # $t1 = COMMAND andi 0xFF
-    beq     $t1, $zero, _rest           # se COMMAND e' a zero resetto 
+    beq     $t1, $zero, _reset          # se COMMAND e' a zero resetto 
     # si 'COMMAND' est different de zero, je passe a la fin de la 
     # verification parce qu'il y a encore un evenement en cours
 
@@ -340,7 +341,7 @@ verifica_condizioni_reset:
         jr      $ra                     # ritonro al chiamante
         nop
 
-_rest:
+_reset:
     # faccio il reset dei contatori
     jal     reset_cont_reset
     jal     reset_cont_allarm
