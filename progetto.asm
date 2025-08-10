@@ -2,7 +2,7 @@
 # 'spazi' di memoria 
 .align 2
 ALLARMS:        .word   0x0000A7F1
-# Sensore 0  : 01
+									# Sensore 0  : 01
                                     # Sensore 1  : 00
                                     # Sensore 2  : 11
                                     # Sensore 3  : 11
@@ -45,9 +45,11 @@ RECORD:         .space 32
 
 # contatori
 .align 2
-cont_reset:     .word 0     # contatore per il reset
-cont_allarm:    .word 0     # contatore per la sirena
-cont_sensor:    .word 0     # contatore sensori attivi
+cont_temp_over	.word 0		# contatore che conta il numero di sensori che hanno una 
+							# temperatura maggiore uguale a 60 gradi
+							
+cont_sec_pass 	.word 0		# contatore che conta quanti secondi sono passati 
+							# (quanti cicli di lettura dell'area di memoria ALLARMS sono passati)
 
 # messaggi
 msg_sirena_attiva:       .asciiz "Sirena attiva\n"
@@ -65,9 +67,9 @@ msg_acapo:               .asciiz "\n"
 .text
 .globl main
 
+# -------------- INIZIO: MAIN --------------
 main:
     # caricamento dei dati nei registri
-
     # 'spazi' di memoria
     la      $s0, ALLARMS            # carico l'indirizzo di ALLARMS nel registro $s0
     la      $s1, COMMAND            # carico l'indirizzo di COMMAND nel registro $s1
@@ -75,12 +77,14 @@ main:
     la      $s3, RECORD             # carico l'indirizzo di RECORD nel registro $s3
     
     # contatori
-    la      $s4, cont_reset         # carico l'indirizzo del contatore del reset nel registro $s4
-    la      $s5, cont_allarm        # carico l'indirizzo del contatore del rest dell'allarme nel registro $s5 
-    la      $s6, cont_sensor        # carico l'indirizzo del contatore dei sensori attivi
-    
+    la      $s4, cont_temp_over		# carico l'indirizzo del contatore dei sensori che hanno una temperatura
+									# maggiore uguale di 60 gradi nel registro $s4
+									
+	la		$s5, cont_sec_pass 		# carico l'indirizzo del contatore dei secondi passati (cicli di lettura)
+									# nel registro $s5
+									
     # stack
-    addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 Byte 
+    addi    $sp, $sp, -16            # sposto indietro l'indirizzo dello stack 
     
     # NOTA: 
     # Ogni 5 secondi (ovvero ogni 5 ripetizioni di main_ciclo) se su command non vine registrato niente
@@ -93,25 +97,18 @@ main:
         # aspetto un secondo
         jal     attendi_un_secondo
 
-        # deasserisco il bit della chiamata dei VVFF
-        # dopo un secondo, se e' a 0 rimane a 0
+        # deasserisco il bit della chiamata dei VVFF se asserito, altrimenti rimane uguale
         jal     smetti_di_chiamare
 
-        # verifica se sussistono le condizioni per il reset
+		# verifica se sussistono le condizioni per il reset
         jal     verifica_condizioni_reset
         
-        # incremento il contatore per il reset
-        jal     agg_cont_reset
-
-        
-        # azzero i contatori utilizzati durante la lettura dei valori
-        jal     reset_cont_allarm   
-        jal     reset_cont_sensor
-
+        # incremento del contatore cont_sec_pass
+		jal 	inc_cont_sec_pass
 
         # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
         leggi_temperature:            
-            move     	$t0, $zero                      # $t0 contatore 
+            move     	$t0, $zero                      # $t0 contatore (indice) 
             move        $t1, $s2                        # copia temporanea di $s2
             
             ciclo_di_lettura:
@@ -119,108 +116,117 @@ main:
                                                         # 16 = 64Byte / 4Byte 
                                                         # quando arrivo al limite massimo, rincomincio da 0
                 
-                # mi salvo sullo stack i valori dei registri $t0, $t1
-                sw      $t0, 4($sp)                     # salvo nello stack il valore di t0 nella seconda word
-                sw      $t1, 0($sp)                     # salvo nello stack il valore di t1 nella prima word 
+                # ------------- salvataggio valori in stack -------------
+				# salvo sullo stack i valori dei registri $t0, $t1
+                sw      $t0, 0($sp)                     # salvo nello stack il valore dell'indice 
+                sw      $t1, 4($sp)                     # salvo nello stack il valore del sensore
                 
-                # messaggio sulla console sullo status di COMMAND
-                move        $a0, $t0
-                jal         msg_command_status          # status di command sulla console
-                
-                # senosre (1 word = (2Byte + 2Byte)) 
+                # ------------- ID e Valore sensori -------------
+				# senosre (1 word = (2Byte + 2Byte)) 
                 # numero del sensore (parte sx della word, 2Byte)
                 # valore del sensore (parte dx della word, 2Byte)
-                lw          $t1, 0($sp)                 # recupero il valore di $t1 dallo stack
-                lw          $t0, 4($sp)                 # recupero il valore di $t0 dallo stack
-                lw          $t2, 0($t1)                 # carico in $t2 il valore della word corrente (errore)
-                
-                # faccio i controlli
+				srl 	$t2, $t1, 16					# id del sensore
+				andi 	$t3, $t1, 0xFFFF				# valore del sensore
 
+                # ------------- salvataggio valori in stack -------------
+                sw      $t2, 8($sp)                     # salvo nello stack il valore dell'id del sensore
+                sw      $t3, 12($sp)                    # salvo nello stack il valore del valore del sensore
+
+				# ------------- messaggio di stato di command -------------
+                move    $a0, $t2                        # argomento: id sensore
+                jal     msg_command_status              # status di command sulla console
+				
+                # ------------- recupero valori dallo stack -------------
+				lw      $t2, 8($sp)                     # reimposto id sensore
+                lw      $t3, 12($sp)                    # reimposto valore sensore
+				
+				# ------------- controllo att sirena -------------
                 # controllo se esistono le condizioni x l'attivazione della sirena 
-                srl     $a0, $t2, 16                    # argomento 0: id del sensore corrente
+                move    $a0, $t2                   		# argomento 0: id del sensore corrente
                 jal     cond_att_sirena                 # verifico se ci sono le condizioni necessarie per attivare
-                                                        # la sirena. NON E' necessario che la temperatura sia superiore 
-                                                        # ai 40 gradi.
+                                                        # la sirena. NON e' necessario che la temperatura sia superiore  ai 40 gradi
 
+				# ------------- controllo temperatura -------------
                 # se la temperatura e' minore di 40gradi
-                andi    $t3, $t2, 0xFFFF
-                ble     $t3, 0x28, aggiorna_successivo  # se la temperatura e' <= 40 gradi
-                                                        # vado al successivo
+                lw      $t3, 12($sp)                    # recupero il valore del sensore
+                ble     $t3, 0x28, aggiorna_successivo  # se la temperatura e' <= 40 gradi vado al successivo
                 # altrimenti:
 
                 # comunico sulla console il valore del sensore ed 
                 # eseguo il salto se la temperatura e' maggiore di 40
-                srl     $a0, $t2, 16                    # argomento 0: id del sensore
-                andi    $a1, $t2, 0xFFFF                # argomento 1: valore del sensore
-                jal     msg_temperatura_sensore         # messaggio sulla console
-                move    $a2, $t0                        # argomento 2: valore del contatore
-                jal     temp_maggiore                   # la temperatura e' > 40 gradi
+                move    $a0, $t2                    	# argomento 0: id del sensore
+                move    $a1, $t3                		# argomento 1: valore del sensore
+                jal     temp_maggiore_quaranta          # la temperatura e' > 40 gradi
 
+
+				# ------------- progressione ciclo -------------
                 # aggiornamento del contatore e calcolo dell'indirizzo successivo da leggere
                 aggiorna_successivo:
                     # recupero i valori salvati in precedenza nello stack (dopo il salto)
-                    lw          $t0, 4($sp)                 # recupero il valode del contatore
-                    lw          $t1, 0($sp)                 # recupero il valode di $t1 prima del salto
-                    addi        $t0, $t0,1                  # incremento il contatore di 1
+                    lw          $t0, 0($sp)             # recupero il valode del contatore
+                    lw          $t1, 4($sp)             # recupero il valode di $t1 prima del salto
+                    addi        $t0, $t0,1              # incremento il contatore di 1
                     addi        $t1, $t1, 4             # vado alla prossima word in memoria
                     j           ciclo_di_lettura        # ritorno al ciclo di lettura
 
-                # condizione x attivare lestrazione ad acqua
-                jal        cond_att_acqua
 
-    
     # fine del programma
     addi    $sp, $sp, 8     # ripristino lo stack
     li      $v0, 10         # codice di uscita dal programma
     syscall
+# -------------- FINE: MAIN --------------
 
-# -------------- TEMPERATURA MAGGIORE DI 40 GRADI --------------
-temp_maggiore:
-    addi        $sp, $sp, -16               # sposto indietro l'idirizzo dello stack pointer 4 word 
+
+# -------------- INIZIO: TEMPERATURA MAGGIORE DI 40 GRADI --------------
+temp_maggiore_quaranta:
+    # $a0: id del sensore
+    # $a1: valore del sensore
+    addi        $sp, $sp, -12               # spazio per 3 word
     sw          $a0, 0($sp)                 # salvo: id del sensore
     sw          $a1, 4($sp)                 # salvo: valore del sensore
-    sw          $a2, 8($sp)                 # salvo: valore del contatore
-    sw          $ra, 12($sp)                # salvo: indirizzo di ritorno
+    sw          $ra, 8($sp)                 # salvo: valore di ritorno
 
     # Aggiungo il numero del sensore all'interno di RECORD
-    sll     $t0, $a2, 1                     # calcolo dell'offset
-                                            # $s2 * 2Byte
-    add     $t1, $s3, $t0                   # indirizzo di dove mettere il valore
-                                            # nell'area di memoria RECORD
-    sh      $a0, 0($t1)                     # salvo l'id del sesnore
-
+    sll		    $t0, $a0, 1			        # offset = id sensore * 2
+    add		    $t1, $s3, $t0               # indirizzo RECORD[ID]
+    sh          $a0, 0($t1)                 # salvo l'id del sensore   
+    
     # Se la temperatura e' minore di 60 gradi
-    blt     $a1, 0x3C, fin_temp_maggiore
-    # la temperatura e' >= 60
-    jal     agg_cont_sensor                 # aggiorno il contatore sensori attivi (temp >= 60)
+    blt     $a1, 0x3C, fin_temp_maggiore_quaranta
+    
+	# la temperatura e' >= 60
+    jal     inc_cont_temp_over              # aggiorno il contatore sensori attivi (temp >= 60)
 
-    # lw      $a0, 0($sp)                   # argomento 0: recupero il valore dell'id del sensore
+    lw      $a0, 0($sp)                     # argomento 0: recupero il valore dell'id del sensore
     jal     cond_att_acqua                  # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
     
     jal     cond_call_VVFF                  # verifico se ci sono le condizione per chiamare i VVFF
 
-    fin_temp_maggiore:
-        lw      $ra, 12($sp)                # recupero dove devo ritornare
-        addi    $sp, $sp, 16                # resetto lo stack
+    fin_temp_maggiore_quaranta:
+        lw      $ra, 8($sp)                # recupero dove devo ritornare
+        addi    $sp, $sp, 12                # resetto lo stack
         jr      $ra                         # ritorno al chiamante
     nop
+# -------------- FINE: TEMPERATURA MAGGIORE DI 40 GRADI --------------
 
-# -------------- ATTIVAZIONE DELLA SIRENA --------------
+
+# -------------- INIZIO: COND ATT SIRENA --------------
 cond_att_sirena:
     # se viene rilevato fumo in almeno un sensore, viene attivata la sirena
     addi    $sp, $sp, -8                    # sposto indietro l'indirizzo dello stack pointer di 8 byte
     sw      $a0, 0($sp)                     # salvo: id del sensore
     sw      $ra, 4($sp)                     # salvo: indirizzo di ritorno 
 
-    lw      $t0, 0($sp)                     # recupero l'id del sensore (2 byte)
-    lw      $t1, 0($s0)                     # carico nel registro $t1 il valore di ALLARMS
+    lw      $t0, 0($s0)                     # recupero il valore di allarms
 
     # creazione della maschera
-    sll     $t2, $t0, 1                     # $t2 = ($t1 * 2)
-    addi    $t2, $t2, 1                     # $t2 + 1
-
-    # isolo il bit di fumo
-    and     $t3, $t1, $t2                   # $t3 = ALLARMS and maschera
+    sll     $t1, $a0, 1                     # $t1 = id_sensore * 2
+    addi    $t1, $t1, 1                     # $t1 + 1
+ 
+    li      $t2, 1
+    sllv    $t2, $t2, $t1                   # t2 = 1 << (id * 2 + 1) -> mashcera per il fumo
+ 
+    and     $t3, $t0, $t2                   # t3 = ALLARMS and maschera
 
     # controllo del valore
     beq     $t3, 0x0, non_attiva_sirena     # se il bit di fumo non e' asserito non eseguo niente
@@ -232,8 +238,10 @@ cond_att_sirena:
         addi    $sp, $sp, 8                 # reset dell'indirizzo dello stack pointer 
         jr      $ra                         # ritorno al chiamante
     nop
+# -------------- FINE: COND ATT SIRENA --------------
 
-# -------------- ATTIVAZIONE ACQUA --------------
+
+# -------------- INIZIO: COND ATT ACQUA --------------
 cond_att_acqua:
     addi        $sp, $sp, -8                # sposto indietro l'indirizzo dello stack pointer di 8 byte
     sw          $a0, 0($sp)                 # salvo: id del sensore
@@ -243,7 +251,7 @@ cond_att_acqua:
     # l'estrazione ad acqua viene attivata solo quando in almeno 2 sensori per almeno 5 sec 
     # viene rilevata una temperatura >= 60 gradi.
 
-    lw      $t0, 0($s6)                     # leggo il valore aggiornato del contatore dei sensori attivi
+    lw      $t0, 0($s4)                     # leggo il valore aggiornato del contatore dei sensori attivi
     blt     $t0, 0x2, fin_cond_att_acqua    # se i sensori attivi sono < 2 non faccio niente
     # sesnori attivi >= 2
     lw      $t8, 0($s5)                     # leggo il valore del counter dei sencondi per attivare la sirena
@@ -256,8 +264,10 @@ cond_att_acqua:
         addi    $sp, $sp, 8                 # resetto lo stack
         jr      $ra                         # ritorno al chiamante
     nop
+# -------------- FINE: COND ATT ACQUA --------------
 
-# -------------- CHIAMATA VVFF --------------
+
+# -------------- INIZIO: COND CALL VVFF --------------
 cond_call_VVFF:
     addi        $sp, $sp, -8
     sw          $a0, 0($sp)                 # salvo: id del sensore corrente
@@ -268,25 +278,26 @@ cond_call_VVFF:
     # la temperatura e' maggiore di 60 gradi per il valore in TEMPERATURE
     # controllo se anche il bit in ALLARMS della temperatura e' asserito
 
-    # maschera per isolare il primo bit della coppia
-    sll         $t1, $a0, 1                 # $t1 = ($a0 * 2) --> $a0 id del sensore
+    # Calcolo posizione base dei bit
+    sll         $t1, $a0, 1                 # $t1 = id * 2
 
-    # isolo bit della temperatura
-    and         $t2, $t0, $t1               # $t2 = ALLARMS and maschera
-                                            # $t2 contiene il valore del bit della temperatura
+    # Maschera temperatura
+    li          $t2, 1
+    sllv        $t2, $t2, $t1               # $t2 = 1 << (id * 2)
+    and         $t4, $t0, $t2               # isola bit temperatura
 
-    # maschera per isolare il secondo bit della coppia
-    addi        $t1, $t1, 1                 # $t1 = ($a0 * 2) + 1 --> aggiorno la maschera per il secondo bit
-
-    # isolo bit del fumo
-    and         $t3, $t0, $t1               # $t3 = ALLARMS and maschera
-                                            # $t3 contiene il valore del bit di fumo
+    # Maschera fumo
+    addi        $t1, $t1, 1                 # posizione fumo = id * 2 + 1
+    li          $t3, 1
+    sllv        $t3, $t3, $t1               # $t3 = 1 << (id * 2 + 1)
+    and         $t5, $t0, $t3               # isola bit fumo
 
     # controllo dei bit
     # controllo del bit della temperatura
-    bne         $t2, 0x1, fin_con_call_VVFF # $t2 != 0x1 -> fin
+    bne         $t4, $t2, fin_con_call_VVFF # se la temperatura non e' asserita
     # il bit e' asserito
-    bne         $t3, 0x1, fin_con_call_VVFF # $t3 != 0x1 -> fin
+    # controllo del bit di fumo
+    bne         $t5, $t3, fin_con_call_VVFF # se il fumo non e' asserito
     # il bit e' asserito
 
     # verifico se i pompieri sono gia' stati chiamati
@@ -319,38 +330,15 @@ is_vvff_call:
     # controllo se il terzo bit di COMMAND e' asserito
     lb          $t0, 0($s1)             # carico nel registro $t0 il valore di COMMAND
     
-    andi        $t1, $t0, 0xFB          # maschera per isolare il bit
-    srl         $v0, $t1, 2             # shift a dx 
+    andi        $v0, $t0, 0x04          # maschera per isolare il bit
+    srl         $v0, $v0, 2             # shift a dx per ottenere 0 o 1  
 
     jr          $ra                     # ritorno al chiamante
     nop
+# -------------- FINE: COND CALL VVFF --------------
 
-# -------------- AZZERA --------------
-verifica_condizioni_reset:
-    # verifico se sono passati 5 secondi
-    lw      $t0, 0($s4)                 # carico in $t0 il valore del contatore x il reset
-    blt     $t0, 0x5, fin_verifica      # $t0 < 5 -> fine verifica
-    # verifico se COMMAND e' tutto a zero
-    lb      $t1, 0($s1)                 # carico COMMAND in $t1
-    andi    $t1, $t1, 0xFF              # $t1 = COMMAND andi 0xFF
-    beq     $t1, $zero, _reset          # se COMMAND e' a zero resetto 
-    # si 'COMMAND' est different de zero, je passe a la fin de la 
-    # verification parce qu'il y a encore un evenement en cours
 
-    fin_verifica:
-        jr      $ra                     # ritonro al chiamante
-        nop
-
-_reset:
-    # faccio il reset dei contatori
-    jal     reset_cont_reset
-    jal     reset_cont_allarm
-    jal     reset_cont_sensor
-    jal     reset_record
-    jr      $ra
-    nop
-
-# -------------- TEMPO DI ATTESA --------------
+# -------------- INIZIO: TEMPO DI ATTESA --------------
 attendi_un_secondo:
     addi    $sp, $sp, -4            # sposto indietro lo stak pointer di 4
     sw      $ra, 0($sp)             # salvo: indirizzo al quale tornare
@@ -372,63 +360,46 @@ attendi_un_secondo:
         addi    $sp, $sp, 4         # rest dello stack
         jr      $ra                 # ritorno al chiamante
         nop
+# -------------- FINE: TEMPO DI ATTESA --------------
 
-# -------------- AGGIORNAMENTO CONTATORI --------------
+
+# -------------- INIZIO: RESET --------------
+verifica_condizioni_reset:
+    # verifico se sono passati 5 secondi
+    lw      $t0, 0($s5)                 # carico il valore del contatore delle iterazioni
+    blt     $t0, 0x5, fine_verifica     # $t0 < 5 -> fine verifica 
+    # verifico se COMMAND e' tutto a zero
+    lb      $t1, 0($s1)                 # carico command
+    andi    $t1, $t1, 0xFF              # command andi 0xFF
+    beq     $t1, $zero, reset           # se command e' a zero resetto
+
+    fine_verifica:
+        jr      $ra
+        nop
+
+reset:
+    jal     reset_cont_sec_pass
+    jal     reset_cont_temp_over
+    jal     reset_record
+    jr      $ra
+    nop
+
 reset_record:
-    lw      $t0, 0($s3)     # carico RECORD in $t0
-    move    $t0, $zero      # azzero
-    sw      $t0, 0($s3)     # salvo il nuovo valore
-    jr      $ra             # ritorno al chiamante
+    li      $t0, $zero          # inizializzo un'indice
+    
+    reset_record_loop:
+        bge     $t0, 32, end_reset_record       # se ho finito l'area di memoria, finisco
+        add     $t1, $s3, $t0                   # recupero l'indirizzo successivo a quello di partenza
+        sw      $zero, 0($t1)                   # azzero il valore corrispondente all'indirizzo 
+        addi    $t0, $t0, 4                     # passo alla prossima word
+        j       reset_record_loop               # ritorno ad inizio ciclo
+    
+    end_reset_record:
+        jr      $ra         # ritorno al chiamante
+        nop
+# -------------- FINE: RESET --------------
 
-# -------------- AGGIORNAMENTO CONTATORI --------------
-
-# aggiornamento del contatore di rest
-agg_cont_reset:
-    lw      $t9, 0($s4)             # carico nel registro $t9 il valore di $s4
-    addi    $t9, $t9, 1             # incremento il contatore di 1
-    sw      $t9, 0($s4)             # aggiorno $s4 con il nuovo valore
-    jr      $ra                     # ritorno al chiamante
-    nop
-
-reset_cont_reset:
-    lw      $t9, 0($s4)             # carico nel registro $t9 il valore di $s4
-    move    $t9, $zero              # azzero
-    sw      $t9, 0($s4)             # aggiorno $s4 con il nuovo valore
-    jr      $ra                     # ritorno al chiamante
-    nop
-
-# aggiornamento contatore per la sirena
-agg_cont_allarm:
-    lw      $t9, 0($s5)             # carico nel registro $t9 il valore di $s5
-    addi    $t9, $t9, 1             # incremento il contatore di 1
-    sw      $t9, 0($s5)             # aggiorno $s5 con il nuovo valore
-    jr      $ra                     # ritorno al chiamante
-    nop
-
-reset_cont_allarm:
-    lw      $t9, 0($s5)             # carico nel registro $t9 il valore di $s5
-    move    $t9, $zero              # azzero
-    sw      $t9, 0($s5)             # aggiorno $s5 con il nuovo valore
-    jr      $ra                     # ritorno al chiamante
-    nop
-
-# aggiornamento contatore sensori attivi
-agg_cont_sensor:
-    lw      $t9, 0($s6)             # carico nel registro $t9 il valore di $s6
-    addi    $t9, $t9, 1             # incremento il contatore di 1
-    sw      $t9, 0($s6)             # aggiorno $s6 con il nuovo valore
-    jr      $ra                     # ritorno al chiamante
-    nop
-
-reset_cont_sensor:
-    lw      $t9, 0($s6)             # carico nel registro $t9 il valore di $s6
-    move    $t9, $zero              # azzero
-    sw      $t9, 0($s6)             # aggiorno $s6 con il nuovo valore
-    jr      $ra                     # ritorno al chiamante
-    nop
-
-# -------------- COMMAND --------------
-
+# -------------- INIZIO: FUNZIONI DI COMMAND --------------
 # funzionamento:
 # se viene rilevato fumo, il primo bit viene asserito
 # se viene rilevata una temperatura > 60 gradi (in almeno 2 sensori) vine asserito il secondo bit
@@ -494,6 +465,7 @@ chiama_vvff:
     # messaggio sulla console
     li      $v0, 4
     la      $a0, msg_chiamata_VVFF
+    syscall
     jr      $ra                     # ritorno al chiamante
     nop
 
@@ -508,52 +480,47 @@ end_chiama_vvff:
     syscall
     jr      $ra                     # ritorno al chiamante
     nop
-# -------------- MESSAGGIO TEMPERATURA SENSORE --------------
-msg_temperatura_sensore:
-    addi    $sp, $sp, -12
-    sw      $a0, 0($sp)     # salvo: id del sensore
-    sw      $a1, 4($sp)     # salvo: valore del sensore
-    sw      $ra, 8($sp)     # salvo: valore dell'indirizzo di ritorno
+# -------------- FINE: FUNZIONI DI COMMAND --------------
 
-    lw      $t0, 0($sp)     # recupero id del sensore
-    lw      $t1, 4($sp)     # recupero valore del sensore
 
-    # scritta: Temperatura sensore
-    li      $v0, 4
-    la      $a0, msg_temperatura
-    syscall
+# -------------- INIZIO: AGGIORNAMENTO CONTATORI --------------
+inc_cont_temp_over:
+    lw      $t9, 0($s4)         # recupero il valore
+    addi    $t9, $t9, 1         # incremento
+    sw      $t9, 0($s4)         # aggiorno il valore
+    jr      $ra                 # ritorno al chiamante
+    nop
 
-    # scritta: Id
-    li      $v0, 4
-    la      $a0, msg_id
-    syscall
+inc_cont_sec_pass:
+    lw      $t9, 0($s5)         # recupero il valore
+    addi    $t9, $t9, 1         # incremento
+    sw      $t9, 0($s5)         # aggiorno il valore
+    jr      $ra                 # ritonro al chiamante
+    nop
 
-    # id del sensore
-    li      $v0, 1
-    move    $a0, $t0
-    syscall
-    # scritta: Valore
-    li      $v0, 4
-    la      $a0, msg_valore
-    syscall
+dec_cont_temp_over:
+    lw      $t9, 0($s4)         # recupero il valore
+    ble     $t9, $zero, end_dec # $t9 <= 0 -> end_dec 
+    addi    $t9, $t9, - 1       # decremento
+    sw      $t9, 0($s4)         # aggiorno il valore
 
-    # valore del sensore
-    li      $v0, 1
-    lw      $t0, 4($sp)
-    move    $a0, $t0
-    syscall
-
-    # scritta: \n
-    li      $v0, 4
-    la      $a0, msg_acapo
-    syscall
-
-    fin_msg_temperatura_sensore:
-        lw      $ra, 8($sp)     # recupero il valore dell'indirizzo di ritorno
-        addi    $sp, $sp, 12    # resetto lo stack (corretto da 8 a 12)
-        jr      $ra             # ritorno al chiamante
+    end_dec:
+        jr      $ra                 # ritorno al chiamante
         nop
 
+reset_cont_temp_over:
+    sw      $zero, 0($s4)       # azzero il contatore
+    jr      $ra                 # ritono al chiamante
+    nop 
+
+reset_cont_sec_pass:
+    sw      $zero, 0($s5)       # azzero il contatore
+    jr      $ra                 # ritono al chiamante
+    nop
+# -------------- FINE: AGGIORNAMENTO CONTATORI --------------
+
+
+# -------------- INIZIO: MESSAGGI DI STATO --------------
 # -------------- MESSAGGIO STATO COMMAND --------------
 msg_command_status:
     addi    $sp, $sp, -4
@@ -561,7 +528,7 @@ msg_command_status:
 
     lb      $t0, 0($s1)             # carico COMMAND in $t0
 
-    # stampo il contatore:
+    # stampo id sensore:
     move    $t2, $a0                # recupero l'argometno e lo metto in $t2
     li      $v0, 1
     move    $a0, $t2
@@ -621,3 +588,50 @@ msg_command_status:
         addi    $sp, $sp, 4     # resetto lo stack
         jr      $ra             # ritorno al chiamante
         nop
+
+# -------------- MESSAGGIO TEMPERATURA SENSORE --------------
+msg_temperatura_sensore:
+    addi    $sp, $sp, -12
+    sw      $a0, 0($sp)     # salvo: id del sensore
+    sw      $a1, 4($sp)     # salvo: valore del sensore
+    sw      $ra, 8($sp)     # salvo: valore dell'indirizzo di ritorno
+
+    lw      $t0, 0($sp)     # recupero id del sensore
+    lw      $t1, 4($sp)     # recupero valore del sensore
+
+    # scritta: Temperatura sensore
+    li      $v0, 4
+    la      $a0, msg_temperatura
+    syscall
+
+    # scritta: Id
+    li      $v0, 4
+    la      $a0, msg_id
+    syscall
+
+    # id del sensore
+    li      $v0, 1
+    move    $a0, $t0
+    syscall
+    # scritta: Valore
+    li      $v0, 4
+    la      $a1, msg_valore
+    syscall
+
+    # valore del sensore
+    li      $v0, 1
+    lw      $t0, 4($sp)
+    move    $a0, $t0
+    syscall
+
+    # scritta: \n
+    li      $v0, 4
+    la      $a0, msg_acapo
+    syscall
+
+    fin_msg_temperatura_sensore:
+        lw      $ra, 8($sp)     # recupero il valore dell'indirizzo di ritorno
+        addi    $sp, $sp, 12    # resetto lo stack (corretto da 8 a 12)
+        jr      $ra             # ritorno al chiamante
+        nop
+# -------------- FINE: MESSAGGI DI STATO --------------
