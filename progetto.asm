@@ -45,11 +45,8 @@ RECORD:         .space 32
 
 # contatori
 .align 2
-cont_temp_over	.word 0		# contatore che conta il numero di sensori che hanno una 
-							# temperatura maggiore uguale a 60 gradi
-							
-cont_sec_pass 	.word 0		# contatore che conta quanti secondi sono passati 
-							# (quanti cicli di lettura dell'area di memoria ALLARMS sono passati)
+cont_temp_over:	.word 0		# contatore che conta il numero di sensori che hanno una temperatura maggiore uguale a 60 gradi
+cont_sec_pass: 	.word 0		# contatore che conta quanti secondi sono passati
 
 # messaggi
 msg_sirena_attiva:       .asciiz "Sirena attiva\n"
@@ -61,7 +58,7 @@ msg_VVFF_non_chiamati:   .asciiz "VVFF non chiamati\n"
 msg_temperatura:         .asciiz "Temperatura sensore:  "
 msg_id:                  .asciiz "Id sensore: "
 msg_valore:              .asciiz "Valore sensore: "
-msg_command:             .asciiz "Command: "
+msg_command:             .asciiz "Command: \n"
 msg_acapo:               .asciiz "\n"
 
 .text
@@ -125,8 +122,9 @@ main:
 				# senosre (1 word = (2Byte + 2Byte)) 
                 # numero del sensore (parte sx della word, 2Byte)
                 # valore del sensore (parte dx della word, 2Byte)
-				srl 	$t2, $t1, 16					# id del sensore
-				andi 	$t3, $t1, 0xFFFF				# valore del sensore
+                lw      $t9, 0($t1)                     # carico in un registro temp il valore di $t1
+				srl 	$t2, $t9, 16					# id del sensore
+				andi 	$t3, $t9, 0xFFFF				# valore del sensore
 
                 # ------------- salvataggio valori in stack -------------
                 sw      $t2, 8($sp)                     # salvo nello stack il valore dell'id del sensore
@@ -171,7 +169,7 @@ main:
 
 
     # fine del programma
-    addi    $sp, $sp, 8     # ripristino lo stack
+    addi    $sp, $sp, 16     # ripristino lo stack
     li      $v0, 10         # codice di uscita dal programma
     syscall
 # -------------- FINE: MAIN --------------
@@ -229,7 +227,7 @@ cond_att_sirena:
     and     $t3, $t0, $t2                   # t3 = ALLARMS and maschera
 
     # controllo del valore
-    beq     $t3, 0x0, non_attiva_sirena     # se il bit di fumo non e' asserito non eseguo niente
+    beq     $t3, $zero, non_attiva_sirena   # se il bit di fumo non e' asserito non eseguo niente
     # altrimenti
     jal attiva_sirena                       # attiva la sirena
 
@@ -317,7 +315,8 @@ smetti_di_chiamare:
     sw          $ra, 0($sp)                     # salvo il valore dell'indirizzo di ritorno
 
     jal         is_vvff_call                    # controllo se sono stati chiamati i VVFF
-    bne         $v0, $zero, end_chiama_vvff     # $v0 != 0 -> smetti
+    beq         $v0, $zero, fin_smetti_di_chiamare # $v0 == 0 -> non faccio niente
+    jal end_chiama_vvff                         # termino la chiamata ai VVFF
 
     fin_smetti_di_chiamare:
         lw          $ra, 0($sp)                 # recupero il valore dell'indirizzo di ritorno
@@ -327,12 +326,17 @@ smetti_di_chiamare:
 
 
 is_vvff_call:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+
     # controllo se il terzo bit di COMMAND e' asserito
     lb          $t0, 0($s1)             # carico nel registro $t0 il valore di COMMAND
     
     andi        $v0, $t0, 0x04          # maschera per isolare il bit
     srl         $v0, $v0, 2             # shift a dx per ottenere 0 o 1  
 
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr          $ra                     # ritorno al chiamante
     nop
 # -------------- FINE: COND CALL VVFF --------------
@@ -365,6 +369,9 @@ attendi_un_secondo:
 
 # -------------- INIZIO: RESET --------------
 verifica_condizioni_reset:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+    
     # verifico se sono passati 5 secondi
     lw      $t0, 0($s5)                 # carico il valore del contatore delle iterazioni
     blt     $t0, 0x5, fine_verifica     # $t0 < 5 -> fine verifica 
@@ -374,18 +381,29 @@ verifica_condizioni_reset:
     beq     $t1, $zero, reset           # se command e' a zero resetto
 
     fine_verifica:
-        jr      $ra
+        lw      $ra, 0($sp)             # carico il valore dallo stack
+        addi    $sp, $sp, 4             # ripristino lo stack
+        jr      $ra                     # ritorno al chiamante
         nop
 
 reset:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+    
     jal     reset_cont_sec_pass
     jal     reset_cont_temp_over
     jal     reset_record
+    
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr      $ra
     nop
 
 reset_record:
-    li      $t0, $zero          # inizializzo un'indice
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+    
+    move        $t0, $zero          # inizializzo un'indice
     
     reset_record_loop:
         bge     $t0, 32, end_reset_record       # se ho finito l'area di memoria, finisco
@@ -395,7 +413,9 @@ reset_record:
         j       reset_record_loop               # ritorno ad inizio ciclo
     
     end_reset_record:
-        jr      $ra         # ritorno al chiamante
+        lw      $ra, 0($sp)             # carico il valore dallo stack
+        addi    $sp, $sp, 4             # ripristino lo stack
+        jr      $ra                     # ritorno al chiamante
         nop
 # -------------- FINE: RESET --------------
 
@@ -411,6 +431,9 @@ reset_record:
 
 # attivazione della sirena
 attiva_sirena:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del primo bit di COMMAND
     ori     $t9, $t9, 0x01          # asserisco il bit
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
@@ -418,11 +441,18 @@ attiva_sirena:
     li      $v0, 4
     la      $a0, msg_sirena_attiva
     syscall
+    
+
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr      $ra                     # ritorno al chiamante
     nop
 
 # disattivazione della sirena
 disattiva_sirena:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+    
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del primo bit di COMMAND
     andi    $t9, $t9, 0xFE          # deasserisco il bit con la maschera 0XFE
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
@@ -430,11 +460,17 @@ disattiva_sirena:
     li      $v0, 4
     la      $a0, msg_sirena_disattiva
     syscall    
+    
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr      $ra                     # ritorno al chiamante
     nop
 
 # attiva impianto ad acqua
 attiva_acqua:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+    
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del secondo bit di COMMAND
     ori     $t9, $t9, 0x02          # asserisco il bit
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
@@ -442,11 +478,17 @@ attiva_acqua:
     li      $v0, 4
     la      $a0, msg_acqua_attiva
     syscall
+    
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr      $ra                     # ritorno al chiamante
     nop
 
 # disattiva impianto ad acqua
 disattiva_acqua:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+    
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del secondo bit di COMMAND
     andi    $t9, $t9, 0xFD          # deasserisco il bit con la maschera 0xFD
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
@@ -454,11 +496,17 @@ disattiva_acqua:
     li      $v0, 4
     la      $a0, msg_acqua_disattiva
     syscall
+    
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr      $ra                     # ritorno al chiamante
     nop
 
 # chiama VVFF
 chiama_vvff:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del terzo bit di COMMADN
     ori     $t9, $t9, 0x04          # asserisco il bit
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
@@ -466,11 +514,17 @@ chiama_vvff:
     li      $v0, 4
     la      $a0, msg_chiamata_VVFF
     syscall
+    
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr      $ra                     # ritorno al chiamante
     nop
 
 # disattiva chiamata VVFF
 end_chiama_vvff:
+    addi    $sp, $sp, -4            # stack
+    sw      $ra, 0($sp)             # salvo il valore di $ra
+
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del terzo bit di COMMADN
     andi    $t9, $t9, 0xFB          # deasserisco il bit con la maschera 0xFB
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
@@ -478,6 +532,9 @@ end_chiama_vvff:
     li      $v0, 4
     la      $a0, msg_VVFF_non_chiamati
     syscall
+
+    lw      $ra, 0($sp)             # carico il valore dallo stack
+    addi    $sp, $sp, 4             # ripristino lo stack
     jr      $ra                     # ritorno al chiamante
     nop
 # -------------- FINE: FUNZIONI DI COMMAND --------------
@@ -485,36 +542,65 @@ end_chiama_vvff:
 
 # -------------- INIZIO: AGGIORNAMENTO CONTATORI --------------
 inc_cont_temp_over:
+    addi    $sp, $sp, -4        # stack
+    sw      $ra, 0($sp)         # salvo il valore di $ra
+    
     lw      $t9, 0($s4)         # recupero il valore
     addi    $t9, $t9, 1         # incremento
     sw      $t9, 0($s4)         # aggiorno il valore
+
+    lw      $ra, 0($sp)         # carico il valore dallo stack
+    addi    $sp, $sp, 4         # ripristino lo stack
     jr      $ra                 # ritorno al chiamante
     nop
 
 inc_cont_sec_pass:
+    addi    $sp, $sp, -4        # stack
+    sw      $ra, 0($sp)         # salvo il valore di $ra
+    
     lw      $t9, 0($s5)         # recupero il valore
     addi    $t9, $t9, 1         # incremento
     sw      $t9, 0($s5)         # aggiorno il valore
+
+    lw      $ra, 0($sp)         # carico il valore dallo stack
+    addi    $sp, $sp, 4         # ripristino lo stack
     jr      $ra                 # ritonro al chiamante
     nop
 
 dec_cont_temp_over:
+    addi    $sp, $sp, -4        # stack
+    sw      $ra, 0($sp)         # salvo il valore di $ra
+
     lw      $t9, 0($s4)         # recupero il valore
     ble     $t9, $zero, end_dec # $t9 <= 0 -> end_dec 
-    addi    $t9, $t9, - 1       # decremento
+    addi    $t9, $t9, -1        # decremento
     sw      $t9, 0($s4)         # aggiorno il valore
 
     end_dec:
+        lw      $ra, 0($sp)         # carico il valore dallo stack
+        addi    $sp, $sp, 4         # ripristino lo stack
         jr      $ra                 # ritorno al chiamante
         nop
 
 reset_cont_temp_over:
+    addi    $sp, $sp, -4        # stack
+    sw      $ra, 0($sp)         # salvo il valore di $ra
+
     sw      $zero, 0($s4)       # azzero il contatore
+    
+    lw      $ra, 0($sp)         # recupero il valore di $ra
+    addi    $sp, $sp, 4         # ripristino lo stack
     jr      $ra                 # ritono al chiamante
     nop 
 
 reset_cont_sec_pass:
+    addi    $sp, $sp, -4        # stack
+    sw      $ra, 0($sp)         # salvo il valore di $ra
+
     sw      $zero, 0($s5)       # azzero il contatore
+    
+    lw      $ra, 0($sp)         # recupero il valore di $ra
+    addi    $sp, $sp, 4         # ripristino lo stack
     jr      $ra                 # ritono al chiamante
     nop
 # -------------- FINE: AGGIORNAMENTO CONTATORI --------------
