@@ -19,9 +19,6 @@ ALLARMS:        .word   0x03AA1071
                                     # Sensore 14 : 01 (temp >60, no fumo)
                                     # Sensore 15 : 00 (normale)
 
-.align 0
-COMMAND:        .byte 0     
-
 .align 2
 TEMPERATURE:    .word 0x00000046    # Sensore 0  : ID=0, temp=70°C
                 .word 0x0001001E    # Sensore 1  : ID=1, temp=30°C
@@ -47,6 +44,9 @@ RECORD:         .space 32
 .align 2
 cont_temp_over:	.word 0		# contatore che conta il numero di sensori che hanno una temperatura maggiore uguale a 60 gradi
 cont_sec_pass: 	.word 0		# contatore che conta quanti secondi sono passati
+
+.align 0
+COMMAND:        .byte 0  
 
 # messaggi
 msg_sirena_attiva:       .asciiz " Sirena attiva\n"
@@ -84,7 +84,7 @@ main:
 									# nel registro $s5
 									
     # inizializzazione RECORD
-    # jal     reset_record
+    jal     reset_record
 
     # stack
     addi    $sp, $sp, -16            # sposto indietro l'indirizzo dello stack 
@@ -440,7 +440,7 @@ salva_record:
 
     sll     $t0, $a0, 1     # offset = index * 2 (byte)
     add     $t1, $s3, $t0   # indirizzo = base + offset
-    sh      $a0, 0($t1)     # salvo il valore
+    sb      $a0, 0($t1)     # salvo il valore
 
     lw      $ra, 4($sp)     # carico l'indirizzo del punto a cui tornare
     addi    $sp, $sp, 8     # ripristino stack
