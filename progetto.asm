@@ -1,44 +1,44 @@
 .data
 # 'spazi' di memoria 
 .align 2
-ALLARMS:        .word   0x0000A7F1
-									# Sensore 0  : 01
-                                    # Sensore 1  : 00
-                                    # Sensore 2  : 11
-                                    # Sensore 3  : 11
-                                    # Sensore 4  : 11
-                                    # Sensore 5  : 11
-                                    # Sensore 6  : 11
-                                    # Sensore 7  : 00
-                                    # Sensore 8  : 10
-                                    # Sensore 9  : 10
-                                    # Sensore 10 : 10
-                                    # Sensore 11 : 10
-                                    # Sensore 12 : 00
-                                    # Sensore 13 : 00
-                                    # Sensore 14 : 00
-                                    # Sensore 15 : 00
+ALLARMS:        .word   0x03AA1071
+                                    # Sensore 0  : 01 (temp >60, no fumo)
+                                    # Sensore 1  : 00 (normale)
+                                    # Sensore 2  : 11 (temp >60 e fumo)
+                                    # Sensore 3  : 01 (temp >60, no fumo)
+                                    # Sensore 4  : 00 (normale)
+                                    # Sensore 5  : 00 (normale)
+                                    # Sensore 6  : 01 (temp >60, no fumo)
+                                    # Sensore 7  : 00 (normale)
+                                    # Sensore 8  : 10 (fumo, temp <=60)
+                                    # Sensore 9  : 10 (fumo, temp <=60)
+                                    # Sensore 10 : 10 (fumo, temp <=60)
+                                    # Sensore 11 : 10 (fumo, temp <=60)
+                                    # Sensore 12 : 11 (temp >60 e fumo)
+                                    # Sensore 13 : 00 (normale)
+                                    # Sensore 14 : 01 (temp >60, no fumo)
+                                    # Sensore 15 : 00 (normale)
 
 .align 0
 COMMAND:        .byte 0     
 
 .align 2
-TEMPERATURE:    .word 0x00000046    # Sensore 0  : ID=0, temp=70°C (>60 e fumo)
-                .word 0x00010041    # Sensore 1  : ID=1, temp=65°C (>60)
-                .word 0x0002005A    # Sensore 2  : ID=2, temp=90°C (>60 e fumo)
-                .word 0x00030032    # Sensore 3  : ID=3, temp=50°C (>40)
-                .word 0x00040028    # Sensore 4  : ID=4, temp=40°C (soglia)
-                .word 0x0005001E    # Sensore 5  : ID=5, temp=30°C (<40)
-                .word 0x00060046    # Sensore 6  : ID=6, temp=70°C (>60)
-                .word 0x00070000    # Sensore 7  : ID=7, temp=0°C (disabilitato)
-                .word 0x0008005F    # Sensore 8  : ID=8, temp=95°C (>60)
-                .word 0x0009003C    # Sensore 9  : ID=9, temp=60°C (soglia)
-                .word 0x000A002D    # Sensore 10 : ID=10, temp=45°C (>40)
-                .word 0x000B0037    # Sensore 11 : ID=11, temp=55°C (>40)
-                .word 0x000C006E    # Sensore 12 : ID=12, temp=110°C (>60 e fumo)
-                .word 0x000D0019    # Sensore 13 : ID=13, temp=25°C (<40)
-                .word 0x000E004B    # Sensore 14 : ID=14, temp=75°C (>60)
-                .word 0x000F0023    # Sensore 15 : ID=15, temp=35°C (<40)
+TEMPERATURE:    .word 0x00000046    # Sensore 0  : ID=0, temp=70°C
+                .word 0x0001001E    # Sensore 1  : ID=1, temp=30°C
+                .word 0x0002005A    # Sensore 2  : ID=2, temp=90°C
+                .word 0x00030050    # Sensore 3  : ID=3, temp=80°C
+                .word 0x00040028    # Sensore 4  : ID=4, temp=40°C
+                .word 0x0005001E    # Sensore 5  : ID=5, temp=30°C
+                .word 0x00060046    # Sensore 6  : ID=6, temp=70°C
+                .word 0x00070000    # Sensore 7  : ID=7, temp=0°C
+                .word 0x00080032    # Sensore 8  : ID=8, temp=50°C
+                .word 0x0009003C    # Sensore 9  : ID=9, temp=60°C
+                .word 0x000A002D    # Sensore 10 : ID=10, temp=45°C
+                .word 0x000B0037    # Sensore 11 : ID=11, temp=55°C
+                .word 0x000C006E    # Sensore 12 : ID=12, temp=110°C
+                .word 0x000D0019    # Sensore 13 : ID=13, temp=25°C
+                .word 0x000E004B    # Sensore 14 : ID=14, temp=75°C
+                .word 0x000F0023    # Sensore 15 : ID=15, temp=35°C
 
 .align 2
 RECORD:         .space 32   
@@ -49,17 +49,20 @@ cont_temp_over:	.word 0		# contatore che conta il numero di sensori che hanno un
 cont_sec_pass: 	.word 0		# contatore che conta quanti secondi sono passati
 
 # messaggi
-msg_sirena_attiva:       .asciiz "Sirena attiva\n"
-msg_sirena_disattiva:    .asciiz "Sirena spenta\n"
-msg_acqua_attiva:        .asciiz "Acqua attiva\n"
-msg_acqua_disattiva:     .asciiz "Acqua spenta\n"
-msg_chiamata_VVFF:       .asciiz "Chiamata VVFF\n"
-msg_VVFF_non_chiamati:   .asciiz "VVFF non chiamati\n"
-msg_temperatura:         .asciiz "Temperatura sensore:  "
-msg_id:                  .asciiz "Id sensore: "
-msg_valore:              .asciiz "Valore sensore: "
-msg_command:             .asciiz "Command: \n"
+msg_sirena_attiva:       .asciiz " Sirena attiva\n"
+msg_sirena_disattiva:    .asciiz " Sirena spenta\n"
+msg_acqua_attiva:        .asciiz " Acqua attiva\n"
+msg_acqua_disattiva:     .asciiz " Acqua spenta\n"
+msg_chiamata_VVFF:       .asciiz " Chiamata VVFF\n"
+msg_VVFF_non_chiamati:   .asciiz " VVFF non chiamati\n"
+msg_temperatura:         .asciiz " Temperatura sensore:  "
+msg_id:                  .asciiz " Id sensore: "
+msg_valore:              .asciiz " Valore sensore: "
+msg_si_fumo:             .asciiz " Fumo: SI "
+msg_no_fumo:             .asciiz " Fumo: NO "
+msg_command:             .asciiz " Command: \n"
 msg_acapo:               .asciiz "\n"
+msg_linea:               .asciiz "\n-----------------------------------\n"
 
 .text
 .globl main
@@ -80,6 +83,9 @@ main:
 	la		$s5, cont_sec_pass 		# carico l'indirizzo del contatore dei secondi passati (cicli di lettura)
 									# nel registro $s5
 									
+    # inizializzazione RECORD
+    # jal     reset_record
+
     # stack
     addi    $sp, $sp, -16            # sposto indietro l'indirizzo dello stack 
     
@@ -92,7 +98,7 @@ main:
 
     main_ciclo:
         # aspetto un secondo
-        jal     attendi_un_secondo
+        #############################################################################jal     attendi_un_secondo
 
         # deasserisco il bit della chiamata dei VVFF se asserito, altrimenti rimane uguale
         jal     smetti_di_chiamare
@@ -130,10 +136,17 @@ main:
                 sw      $t2, 8($sp)                     # salvo nello stack il valore dell'id del sensore
                 sw      $t3, 12($sp)                    # salvo nello stack il valore del valore del sensore
 
+                # ------------- messaggio di stato sensore -------------
+                move    $a0, $t2                        # argomento 0: id sensore
+                move    $a1, $t3                        # argomento 1: valore sensore
+                jal     msg_temperatura_sensore         # stampo i valori del sensore sulla console 
+
 				# ------------- messaggio di stato di command -------------
-                move    $a0, $t2                        # argomento: id sensore
                 jal     msg_command_status              # status di command sulla console
 				
+                # ------------- messaggio: linea sulla console -------------
+                jal stampa_solo_linea
+                
                 # ------------- recupero valori dallo stack -------------
 				lw      $t2, 8($sp)                     # reimposto id sensore
                 lw      $t3, 12($sp)                    # reimposto valore sensore
@@ -179,31 +192,30 @@ main:
 temp_maggiore_quaranta:
     # $a0: id del sensore
     # $a1: valore del sensore
-    addi        $sp, $sp, -12               # spazio per 3 word
-    sw          $a0, 0($sp)                 # salvo: id del sensore
-    sw          $a1, 4($sp)                 # salvo: valore del sensore
-    sw          $ra, 8($sp)                 # salvo: valore di ritorno
+    addi    $sp, $sp, -12               # spazio per 3 word
+    sw      $a0, 0($sp)                 # salvo: id del sensore
+    sw      $a1, 4($sp)                 # salvo: valore del sensore
+    sw      $ra, 8($sp)                 # salvo: valore di ritorno
 
-    # Aggiungo il numero del sensore all'interno di RECORD
-    sll		    $t0, $a0, 1			        # offset = id sensore * 2
-    add		    $t1, $s3, $t0               # indirizzo RECORD[ID]
-    sh          $a0, 0($t1)                 # salvo l'id del sensore   
+    # salvataggio in RECORD
+    lw      $a0, 0($sp)                 # recupero l'id del sensore
+    jal     salva_record
     
     # Se la temperatura e' minore di 60 gradi
     blt     $a1, 0x3C, fin_temp_maggiore_quaranta
     
 	# la temperatura e' >= 60
-    jal     inc_cont_temp_over              # aggiorno il contatore sensori attivi (temp >= 60)
+    jal     inc_cont_temp_over          # aggiorno il contatore sensori attivi (temp >= 60)
 
-    lw      $a0, 0($sp)                     # argomento 0: recupero il valore dell'id del sensore
-    jal     cond_att_acqua                  # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
+    lw      $a0, 0($sp)                 # argomento 0: recupero il valore dell'id del sensore
+    jal     cond_att_acqua              # verifico se ci sono le condizioni per l'attivazione dell'estrazione ad acqua
     
-    jal     cond_call_VVFF                  # verifico se ci sono le condizione per chiamare i VVFF
+    jal     cond_call_VVFF              # verifico se ci sono le condizione per chiamare i VVFF
 
     fin_temp_maggiore_quaranta:
-        lw      $ra, 8($sp)                # recupero dove devo ritornare
-        addi    $sp, $sp, 12                # resetto lo stack
-        jr      $ra                         # ritorno al chiamante
+        lw      $ra, 8($sp)             # recupero dove devo ritornare
+        addi    $sp, $sp, 12            # resetto lo stack
+        jr      $ra                     # ritorno al chiamante
     nop
 # -------------- FINE: TEMPERATURA MAGGIORE DI 40 GRADI --------------
 
@@ -326,8 +338,8 @@ smetti_di_chiamare:
 
 
 is_vvff_call:
-    addi    $sp, $sp, -4            # stack
-    sw      $ra, 0($sp)             # salvo il valore di $ra
+    addi        $sp, $sp, -4            # stack
+    sw          $ra, 0($sp)             # salvo il valore di $ra
 
     # controllo se il terzo bit di COMMAND e' asserito
     lb          $t0, 0($s1)             # carico nel registro $t0 il valore di COMMAND
@@ -335,8 +347,8 @@ is_vvff_call:
     andi        $v0, $t0, 0x04          # maschera per isolare il bit
     srl         $v0, $v0, 2             # shift a dx per ottenere 0 o 1  
 
-    lw      $ra, 0($sp)             # carico il valore dallo stack
-    addi    $sp, $sp, 4             # ripristino lo stack
+    lw          $ra, 0($sp)             # carico il valore dallo stack
+    addi        $sp, $sp, 4             # ripristino lo stack
     jr          $ra                     # ritorno al chiamante
     nop
 # -------------- FINE: COND CALL VVFF --------------
@@ -419,15 +431,64 @@ reset_record:
         nop
 # -------------- FINE: RESET --------------
 
+
+# -------------- INIZIO: SALVA_RECORD --------------
+salva_record:
+    addi    $sp, $sp, -8    # stack
+    sw      $a0, 0($sp)     # salvo: id sensore
+    sw      $ra, 4($sp)     # salvo: indirizzo al quale devo tornare
+
+    sll     $t0, $a0, 1     # offset = index * 2 (byte)
+    add     $t1, $s3, $t0   # indirizzo = base + offset
+    sh      $a0, 0($t1)     # salvo il valore
+
+    lw      $ra, 4($sp)     # carico l'indirizzo del punto a cui tornare
+    addi    $sp, $sp, 8     # ripristino stack
+    jr      $ra             # ritorno al chiamante
+    nop
+# -------------- FINE: SALVA_RECORD --------------
+
+
+# -------------- INIZIO: FUNZIONE FUMO --------------
+is_presenza_di_fumo:
+    addi    $sp, $sp, -8    # stack
+    sw      $a0, 0($sp)     # salvo: id sensore
+    sw      $ra, 4($sp)     # salvo: indirizzo al quale devo tornare
+
+    # accedo a ALLARMS 
+    lw      $t0, 0($s0)     # carico il valore di ALLARMS in $t0
+
+    # creo la maschera (secondo bit della coppia)
+    li      $t1, 1           # base della maschera
+    sll     $t2, $a0, 1      # id * 2
+    addi    $t2, $t2, 1      # id * 2 + 1
+    sllv    $t1, $t1, $t2    # maschera = 1 << (id * 2 + 1)
+
+    # applico la maschera
+    and     $t3, $t0, $t1    # applico la maschera
+
+    # normalizzo il risultato e rirorno il valore
+    srlv    $v0, $t3, $t2    # normalizzo a 0 o 1
+
+    lw      $ra, 4($sp)     # carico l'indirizzo del punto a cui tornare
+    addi    $sp, $sp, 8     # ripristino stack
+    jr      $ra             # ritorno al chiamante
+    nop
+# -------------- FINE: FUNZIONE FUMO --------------
+
+
 # -------------- INIZIO: FUNZIONI DI COMMAND --------------
 # funzionamento:
 # se viene rilevato fumo, il primo bit viene asserito
 # se viene rilevata una temperatura > 60 gradi (in almeno 2 sensori) vine asserito il secondo bit
 # se viene rilevato fumo e la temperatura e' > 60 in un sensore, viene asserito il terzo bit
-#          ori      andi
-# bit 0 -> 0x01     0xFE
-# bit 1 -> 0x02     0XFD
-# bit 2 -> 0x04     0XFB
+#            (ori - attiva)           (andi - disattiva)
+# bit 0 -> (0b00000 001 -> 0x1)      (0b00000 110 -> 0x6)
+# bit 1 -> (0b00000 010 -> 0x2)      (0b00000 101 -> 0x5)
+# bit 2 -> (0b00000 100 -> 0x4)      (0b00000 011 -> 0x3)
+# 
+# N: i 5 bit a 0, vengono sempre resettati a 0. NON c'e' nessuna perdita di informazioni
+# dal momento che devo lavorare solo con i primi 3 bit (0, 1, 2) 
 
 # attivazione della sirena
 attiva_sirena:
@@ -454,7 +515,7 @@ disattiva_sirena:
     sw      $ra, 0($sp)             # salvo il valore di $ra
     
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del primo bit di COMMAND
-    andi    $t9, $t9, 0xFE          # deasserisco il bit con la maschera 0XFE
+    andi    $t9, $t9, 0x6           # deasserisco il bit con la maschera 0X6
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
     # messaggio sulla console
     li      $v0, 4
@@ -490,7 +551,7 @@ disattiva_acqua:
     sw      $ra, 0($sp)             # salvo il valore di $ra
     
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del secondo bit di COMMAND
-    andi    $t9, $t9, 0xFD          # deasserisco il bit con la maschera 0xFD
+    andi    $t9, $t9, 0x5           # deasserisco il bit con la maschera 0x5
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
     # messaggio sulla console
     li      $v0, 4
@@ -526,7 +587,7 @@ end_chiama_vvff:
     sw      $ra, 0($sp)             # salvo il valore di $ra
 
     lb      $t9, 0($s1)             # carico nel registro $t9 il valore del terzo bit di COMMADN
-    andi    $t9, $t9, 0xFB          # deasserisco il bit con la maschera 0xFB
+    andi    $t9, $t9, 0x3           # deasserisco il bit con la maschera 0x3
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
     # messaggio sulla console
     li      $v0, 4
@@ -614,12 +675,6 @@ msg_command_status:
 
     lb      $t0, 0($s1)             # carico COMMAND in $t0
 
-    # stampo id sensore:
-    move    $t2, $a0                # recupero l'argometno e lo metto in $t2
-    li      $v0, 1
-    move    $a0, $t2
-    syscall
-
     # scritta: command
     li      $v0, 4
     la      $a0, msg_command
@@ -682,8 +737,8 @@ msg_temperatura_sensore:
     sw      $a1, 4($sp)     # salvo: valore del sensore
     sw      $ra, 8($sp)     # salvo: valore dell'indirizzo di ritorno
 
-    lw      $t0, 0($sp)     # recupero id del sensore
-    lw      $t1, 4($sp)     # recupero valore del sensore
+    move    $t0, $a0        # id sensore
+    move    $t1, $a1        # valore sensore
 
     # scritta: Temperatura sensore
     li      $v0, 4
@@ -699,9 +754,10 @@ msg_temperatura_sensore:
     li      $v0, 1
     move    $a0, $t0
     syscall
+
     # scritta: Valore
     li      $v0, 4
-    la      $a1, msg_valore
+    la      $a0, msg_valore
     syscall
 
     # valore del sensore
@@ -710,14 +766,39 @@ msg_temperatura_sensore:
     move    $a0, $t0
     syscall
 
-    # scritta: \n
+    # fumo
+    lw      $a0, 0($sp)             # carico $a0 l'id del sensore
+    jal     is_presenza_di_fumo     # entro nella funzione
+    bne     $v0, $zero, si_fumo     # $v0 != 0 -> fumo
+    # scritta: Fumo NO
     li      $v0, 4
-    la      $a0, msg_acapo
+    la      $a0, msg_no_fumo
     syscall
+    j       fine_scritta            # vado alla fine
 
-    fin_msg_temperatura_sensore:
+    si_fumo:
+        # scritta: Fumo SI
+        li      $v0, 4
+        la      $a0, msg_si_fumo
+        syscall
+
+    fine_scritta:
+        # scritta: \n
+        li      $v0, 4
+        la      $a0, msg_acapo
+        syscall
+        
         lw      $ra, 8($sp)     # recupero il valore dell'indirizzo di ritorno
         addi    $sp, $sp, 12    # resetto lo stack (corretto da 8 a 12)
         jr      $ra             # ritorno al chiamante
         nop
+
+# -------------- MESSAGGIO SOLO LINEA --------------
+stampa_solo_linea:
+    # scritta: linea
+    li      $v0, 4
+    la      $a0, msg_linea
+    syscall
+    jr      $ra
+    nop
 # -------------- FINE: MESSAGGI DI STATO --------------
