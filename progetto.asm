@@ -98,7 +98,7 @@ main:
 
     main_ciclo:
         # aspetto un secondo
-        #############################################################################jal     attendi_un_secondo
+        jal     attendi_un_secondo
 
         # deasserisco il bit della chiamata dei VVFF se asserito, altrimenti rimane uguale
         jal     smetti_di_chiamare
@@ -156,6 +156,10 @@ main:
                 move    $a0, $t2                   		# argomento 0: id del sensore corrente
                 jal     cond_att_sirena                 # verifico se ci sono le condizioni necessarie per attivare
                                                         # la sirena. NON e' necessario che la temperatura sia superiore  ai 40 gradi
+
+                # ------------- recupero valori dallo stack -------------
+				lw      $t2, 8($sp)                     # reimposto id sensore
+                lw      $t3, 12($sp)                    # reimposto valore sensore
 
 				# ------------- controllo temperatura -------------
                 # se la temperatura e' minore di 40gradi
@@ -420,7 +424,7 @@ reset_record:
     reset_record_loop:
         bge     $t0, 32, end_reset_record       # se ho finito l'area di memoria, finisco
         add     $t1, $s3, $t0                   # recupero l'indirizzo successivo a quello di partenza
-        sw      $zero, 0($t1)                   # azzero il valore corrispondente all'indirizzo 
+        sb      $zero, 0($t1)                   # azzero il valore corrispondente all'indirizzo 
         addi    $t0, $t0, 4                     # passo alla prossima word
         j       reset_record_loop               # ritorno ad inizio ciclo
     
@@ -438,9 +442,12 @@ salva_record:
     sw      $a0, 0($sp)     # salvo: id sensore
     sw      $ra, 4($sp)     # salvo: indirizzo al quale devo tornare
 
-    sll     $t0, $a0, 1     # offset = index * 2 (byte)
-    add     $t1, $s3, $t0   # indirizzo = base + offset
-    sb      $a0, 0($t1)     # salvo il valore
+    # sll     $t0, $a0, 1     # offset = index * 2 (byte)
+    # add     $t1, $s3, $t0   # indirizzo = base + offset
+    # sb      $a0, 0($t1)     # salvo il valore
+
+    mul     $t1, $a0, 2         # id_sensore * 2 = valore indice
+    sb      $a0, RECORD($t1)    # salvo il valoe
 
     lw      $ra, 4($sp)     # carico l'indirizzo del punto a cui tornare
     addi    $sp, $sp, 8     # ripristino stack
