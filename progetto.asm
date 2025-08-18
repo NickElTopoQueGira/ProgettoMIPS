@@ -63,6 +63,12 @@ msg_no_fumo:             .asciiz " Fumo: NO "
 msg_command:             .asciiz " Command: \n"
 msg_acapo:               .asciiz "\n"
 msg_linea:               .asciiz "\n-----------------------------------\n"
+ins_temp_init:     .asciiz "  > Temperatura: (°C): "
+msg_err_temp_iniz:    .asciiz "  ! Valore non valido. Inserire un valore tra 0 e 200.\n"
+ins_fumo_init:     .asciiz "  > Fumo (0=no, 1=si): "
+msg_err_fumo_iniz:    .asciiz "  ! Valore non valido. Inserisci 0 o 1.\n"
+msg_ok_temp:          .asciiz "  + Temperatura inserita correttamente.\n"
+msg_ok_fumo:          .asciiz "  + Valore fumo inserito correttamente.\n"
 
 .text
 .globl main
@@ -82,7 +88,10 @@ main:
 									
 	la		$s5, cont_sec_pass 		# carico l'indirizzo del contatore dei secondi passati (cicli di lettura)
 									# nel registro $s5
-									
+# -----inizializzazione manuale sensori -----
+    jal     init_sensori_manuale
+
+
     # inizializzazione RECORD
     jal     reset_record
 
@@ -809,3 +818,120 @@ stampa_solo_linea:
     jr      $ra
     nop
 # -------------- FINE: MESSAGGI DI STATO --------------
+
+# -------------- INIZIO: INIZIALIZZAZIONE SENSORI MANUALE --------------
+init_sensori_manuale:
+    addi    $sp, $sp, -8                # stack
+    sw      $ra, 0($sp)                 # salvataggio dell'indirizzo di ritorno al chiamante
+    sw      $t6, 4($sp)                 # salvataggio del contatore dei sensori
+
+    li      $t6, 0                      # inizializzazione indice sensore a 0
+
+isens_loop:
+    bge     $t6, 16, fine_init_sens     # verifico se l'indice è maggiore o uguale a 16 (tutti i sensori sono stati inizializzati), uscita
+
+    # intestazione sensore
+    li      $v0, 4                      # stampa di una stringa
+    la      $a0, msg_id                 
+    syscall
+    li      $v0, 1                      # stampa di un intero
+    move    $a0, $t6                    # passaggio dell'indice del sensore
+    syscall
+    li      $v0, 4                      # stampa a capo
+    la      $a0, msg_acapo
+    syscall
+
+# --- lettura valore temperatura ---
+leggi_temp:
+    li      $v0, 4                      # richiesta della temperatura
+    la      $a0, ins_temp_init
+    syscall
+    li      $v0, 5                      # inserimento del valore di temperatura
+    syscall
+    move    $t7, $v0                    # salvataggio in $t7 del valore inserito
+    bltz    $t7, temp_err               # messaggio di errore se temperatura < 0
+    li      $t8, 200                    # valore massimo registrato dal sensore
+    sltu    $t9, $t8, $t7               # $t9 = 1 se $t7 > 200
+    bne     $t9, $zero, temp_err        # messaggio di errore se viene superato il valore soglia
+
+    # salvataggio temperatura
+    sll     $t8, $t6, 16                # spostamento a sinistra dell'ID sensore
+    or      $t8, $t8, $t7               # ID e temperatura combinati in un unica word
+    sll     $t9, $t6, 2                 # calcolo dell'offset
+    add     $t9, $t9, $s2               # indirizzo temperature + offset
+    sw      $t8, 0($t9)                 # salvataggio della word in TEMPERATURE
+
+    # conferma salvataggio temperatura
+    li      $v0, 4                      # messaggio di conferma inserimento della temperatura
+    la      $a0, msg_ok_temp
+    syscall
+
+    j       lettura_fumo                # jump alla lettura del valore del fumo
+
+temp_err:
+    li      $v0, 4                      # messaggio di errore per la temperatura
+    la      $a0, msg_err_temp_iniz
+    syscall
+    j       leggi_temp                  # ripetere la lettura per la temperatura
+
+# --- lettura del valore per il fumo ---
+lettura_fumo:
+    li      $v0, 4                      # richiesta del valore del fumo (0 = NO, 1 = SI)
+    la      $a0, ins_fumo_init
+    syscall
+    li      $v0, 5                      # salvataggio del valore inserito
+    syscall
+    move    $t7, $v0                    # se valore inserito = 0 -> non c'è fumo
+    beq     $t7, $zero, fumo_zero
+    li      $t8, 1                      # se valore inserito = 1 -> presenza di fumo
+    beq     $t7, $t8, fumo_uno      
+
+    li      $v0, 4                      # messaggio di errore per il fumo
+    la      $a0, msg_err_fumo_iniz
+    syscall
+    j       lettura_fumo                # ripetere la lettura per il fumo
+
+fumo_zero:
+    li      $t8, 1                      
+    sll     $t9, $t6, 1          
+    addi    $t9, $t9, 1                 # posizione bit fumo = ID * 2 + 1
+    sllv    $t8, $t8, $t9               # maschera 
+    nor     $t8, $t8, $zero             # inverte i valori 
+    lw      $t1, 0($s0)                 # carica valore ALLARMS
+    and     $t1, $t1, $t8               # azzeramento del bit fumo per questo sensore
+    sw      $t1, 0($s0)                 # salvataggio di ALLARMS aggiornato
+
+    li      $v0, 4                      # messaggio di conferma del fumo
+    la      $a0, msg_ok_fumo            
+    syscall
+    j       separa_sensore              # jump alla spaziatura tra i sensori
+
+fumo_uno:
+    li      $t8, 1                      
+    sll     $t9, $t6, 1                 
+    addi    $t9, $t9, 1                 # posizione bit fumo = ID * 2 + 1
+    sllv    $t8, $t8, $t9               # maschera
+    lw      $t1, 0($s0)                 # carico valore ALLARMS
+    or      $t1, $t1, $t8               # asserimento del bit fumo nel sensore
+    sw      $t1, 0($s0)                 # salvataggio di ALLARMS aggiornato
+
+    li      $v0, 4                      # messaggio di caricamento del fumo
+    la      $a0, msg_ok_fumo
+    syscall
+
+# --- spaziatura tra i sensori ---
+separa_sensore:
+    li      $v0, 4                      # inserimento della linea per separare i sensori
+    la      $a0, msg_linea
+    syscall
+
+    addi    $t6, $t6, 1                 # passaggio al sensore successivo
+    j       isens_loop                  # ripetizione del ciclo per il sensore successivo
+
+fine_init_sens:
+    lw      $ra, 0($sp)                 # recupero dell'indirizzo di ritorno
+    lw      $t6, 4($sp)                 # recupero contatore con indice del sensore
+    addi    $sp, $sp, 8                 # ripristino dello stack
+    jr      $ra                         # ritorno al chaimante
+    nop
+# -------------- FINE: INIZIALIZZAZIONE SENSORI MANUALE --------------
