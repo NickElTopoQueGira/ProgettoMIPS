@@ -61,14 +61,16 @@ msg_valore:              .asciiz " Valore sensore: "
 msg_si_fumo:             .asciiz " Fumo: SI "
 msg_no_fumo:             .asciiz " Fumo: NO "
 msg_command:             .asciiz " Command: \n"
+msg_riepilogo_record:    .asciiz " Riepilogo RECORD: "
+msg_sensori_salvati:     .asciiz " Sensori Salvati: \n"
 msg_acapo:               .asciiz "\n"
 msg_linea:               .asciiz "\n-----------------------------------\n"
-ins_temp_init:     .asciiz "  > Temperatura: (°C): "
-msg_err_temp_iniz:    .asciiz "  ! Valore non valido. Inserire un valore tra 0 e 200.\n"
-ins_fumo_init:     .asciiz "  > Fumo (0=no, 1=si): "
-msg_err_fumo_iniz:    .asciiz "  ! Valore non valido. Inserisci 0 o 1.\n"
-msg_ok_temp:          .asciiz "  + Temperatura inserita correttamente.\n"
-msg_ok_fumo:          .asciiz "  + Valore fumo inserito correttamente.\n"
+ins_temp_init:           .asciiz "  > Temperatura: (°C): "
+msg_err_temp_iniz:       .asciiz "  ! Valore non valido. Inserire un valore tra 0 e 200.\n"
+ins_fumo_init:           .asciiz "  > Fumo (0=no, 1=si): "
+msg_err_fumo_iniz:       .asciiz "  ! Valore non valido. Inserisci 0 o 1.\n"
+msg_ok_temp:             .asciiz "  + Temperatura inserita correttamente.\n"
+msg_ok_fumo:             .asciiz "  + Valore fumo inserito correttamente.\n"
 
 .text
 .globl main
@@ -80,7 +82,7 @@ main:
     la      $s0, ALLARMS            # carico l'indirizzo di ALLARMS nel registro $s0
     la      $s1, COMMAND            # carico l'indirizzo di COMMAND nel registro $s1
     la      $s2, TEMPERATURE        # carico l'indizirro di TEMPERATURE nel registro $s2
-    la      $s3, RECORD             # carico l'indirizzo di RECORD nel registro $s3
+#    la      $s3, RECORD             # carico l'indirizzo di RECORD nel registro $s3 ----> SPOSTATO NELLE SUB-RUTINE CHE LO UTILIZZANO
     
     # contatori
     la      $s4, cont_temp_over		# carico l'indirizzo del contatore dei sensori che hanno una temperatura
@@ -88,9 +90,9 @@ main:
 									
 	la		$s5, cont_sec_pass 		# carico l'indirizzo del contatore dei secondi passati (cicli di lettura)
 									# nel registro $s5
-# -----inizializzazione manuale sensori -----
-    jal     init_sensori_manuale
-
+    
+    # -----inizializzazione manuale sensori -----
+   jal     init_sensori_manuale
 
     # inizializzazione RECORD
     jal     reset_record
@@ -106,6 +108,9 @@ main:
     # Ad ogni lettura, se il 3 bit di command e' asserito (quello dei VVFF) viene deasserito
 
     main_ciclo:
+        # comunico lo stato di RECORD
+        jal     riepilogo_record
+
         # aspetto un secondo
         jal     attendi_un_secondo
 
@@ -181,7 +186,6 @@ main:
                 move    $a0, $t2                    	# argomento 0: id del sensore
                 move    $a1, $t3                		# argomento 1: valore del sensore
                 jal     temp_maggiore_quaranta          # la temperatura e' > 40 gradi
-
 
 				# ------------- progressione ciclo -------------
                 # aggiornamento del contatore e calcolo dell'indirizzo successivo da leggere
@@ -427,14 +431,16 @@ reset:
 reset_record:
     addi    $sp, $sp, -4            # stack
     sw      $ra, 0($sp)             # salvo il valore di $ra
-    
-    move        $t0, $zero          # inizializzo un'indice
-    
+    la      $s3, RECORD             # recupero l'indirizzo di RECORD
+
+    move    $t0, $zero              # inizializzo un'indice
+    li      $t8, 0xFF               # valore per inizializzare
+
     reset_record_loop:
         bge     $t0, 32, end_reset_record       # se ho finito l'area di memoria, finisco
         add     $t1, $s3, $t0                   # recupero l'indirizzo successivo a quello di partenza
-        sb      $zero, 0($t1)                   # azzero il valore corrispondente all'indirizzo 
-        addi    $t0, $t0, 4                     # passo alla prossima word
+        sh      $t8, 0($t1)                     # azzero il valore corrispondente all'indirizzo 
+        addi    $t0, $t0, 2                     # passo alla prossima coppia
         j       reset_record_loop               # ritorno ad inizio ciclo
     
     end_reset_record:
@@ -451,12 +457,10 @@ salva_record:
     sw      $a0, 0($sp)     # salvo: id sensore
     sw      $ra, 4($sp)     # salvo: indirizzo al quale devo tornare
 
-    # sll     $t0, $a0, 1     # offset = index * 2 (byte)
-    # add     $t1, $s3, $t0   # indirizzo = base + offset
-    # sb      $a0, 0($t1)     # salvo il valore
-
-    mul     $t1, $a0, 2         # id_sensore * 2 = valore indice
-    sb      $a0, RECORD($t1)    # salvo il valoe
+    la      $s3, RECORD     # Recupero l'indirizzo di record
+    mul     $t0, $a0, 2     # offset = id * 2 Byte
+    add     $s3, $s3, $t0   # indirizzo + offset
+    sh      $a0, 0($s3)     # salvo il valore
 
     lw      $ra, 4($sp)     # carico l'indirizzo del punto a cui tornare
     addi    $sp, $sp, 8     # ripristino stack
@@ -811,12 +815,68 @@ msg_temperatura_sensore:
 
 # -------------- MESSAGGIO SOLO LINEA --------------
 stampa_solo_linea:
+    addi    $sp, $sp, -4    # stack
+    sw      $ra, 0($sp)     # salvo il registro al quale tornare
     # scritta: linea
     li      $v0, 4
     la      $a0, msg_linea
     syscall
-    jr      $ra
+
+    lw      $ra, 0($sp)     # recupero il valore di $ra
+    addi    $sp, $sp, 4     # reimpostao lo stack
+    jr      $ra             # torno a $ra
     nop
+
+# -------------- MESSAGGIO ELEMENTI PRESENTI IN RECORD --------------
+riepilogo_record:
+    addi    $sp, $sp, -4
+    sw      $ra, 0($sp)
+
+    # scritta: riepilogo RECORD
+    li      $v0, 4
+    la      $a0, msg_riepilogo_record
+    syscall
+
+    # scritta: sensori salvati
+    li      $v0, 4
+    la      $a0, msg_sensori_salvati
+    syscall
+
+    li      $t9, 0          # indice
+    loop_riepilogo:
+        bge     $t9, 16, end_riepilogo  # if $t9 > 16 -> end_riepilogo
+        mul     $t0, $t9, 2
+        lh      $t8, RECORD($t0)        # recupero il valore
+
+        beq     $t8, 0xFF, skip_stampa     # $t8 == 0xFF -> skip stampa
+
+        # scritta: id
+        li      $v0, 4
+        la      $a0, msg_id
+        syscall
+
+        # scritta: id valore
+        li      $v0, 1
+        move    $a0, $t8
+        syscall
+
+        
+
+        # scritta: a capo
+        li      $v0, 4
+        la      $a0, msg_acapo
+        syscall
+        
+        skip_stampa:
+            addi     $t9, $t9, 1     # $t9 * 2
+            j       loop_riepilogo
+
+    end_riepilogo:
+        jal     stampa_solo_linea
+        lw      $ra, 0($sp)
+        addi    $sp, $sp, 4
+        jr      $ra
+        nop
 # -------------- FINE: MESSAGGI DI STATO --------------
 
 # -------------- INIZIO: INIZIALIZZAZIONE SENSORI MANUALE --------------
