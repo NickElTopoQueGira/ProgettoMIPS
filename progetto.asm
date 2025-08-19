@@ -53,8 +53,8 @@ msg_sirena_attiva:       .asciiz " Sirena attiva\n"
 msg_sirena_disattiva:    .asciiz " Sirena spenta\n"
 msg_acqua_attiva:        .asciiz " Acqua attiva\n"
 msg_acqua_disattiva:     .asciiz " Acqua spenta\n"
-msg_chiamata_VVFF:       .asciiz " Chiamata VVFF\n"
-msg_VVFF_non_chiamati:   .asciiz " VVFF non chiamati\n"
+msg_chiamata_VVFF:       .asciiz " Chiamta ai VVFF in corso\n"
+msg_VVFF_non_chiamati:   .asciiz " VVFF NON chiamati\n"
 msg_VVFF_fine_chiamata:  .asciiz " Fine chiamata VVFF\n"
 msg_temperatura:         .asciiz " Temperatura sensore:  "
 msg_id:                  .asciiz " Id sensore: "
@@ -93,7 +93,7 @@ main:
 									# nel registro $s5
     
     # -----inizializzazione manuale sensori -----
-   jal     init_sensori_manuale
+#   jal     init_sensori_manuale
 
     # inizializzazione RECORD
     jal     reset_record
@@ -171,6 +171,7 @@ main:
                 move    $a0, $t2                   		# argomento 0: id del sensore corrente
                 jal     cond_att_sirena                 # verifico se ci sono le condizioni necessarie per attivare
                                                         # la sirena. NON e' necessario che la temperatura sia superiore  ai 40 gradi
+                                                        # basta solo la presenza di fumo su almeno un sensore
 
                 # ------------- recupero valori dallo stack -------------
 				lw      $t2, 8($sp)                     # reimposto id sensore
@@ -182,7 +183,6 @@ main:
                 ble     $t3, 0x28, aggiorna_successivo  # se la temperatura e' <= 40 gradi vado al successivo
                 # altrimenti:
 
-                # comunico sulla console il valore del sensore ed 
                 # eseguo il salto se la temperatura e' maggiore di 40
                 move    $a0, $t2                    	# argomento 0: id del sensore
                 move    $a1, $t3                		# argomento 1: valore del sensore
@@ -694,61 +694,120 @@ msg_command_status:
     addi    $sp, $sp, -4
     sw      $ra, 0($sp)
 
-    lb      $t0, 0($s1)             # carico COMMAND in $t0
-
-    # scritta: command
+    # messaggio di stato di COMMAND:
     li      $v0, 4
     la      $a0, msg_command
     syscall
 
-    # verifico se il primo bit    (0)
-    andi    $t1, $t0, 0x01
-    beq     $t1, $zero, stampa_sirena_non_attiva
-    # sirena attiva
-    li      $v0, 4
-    la      $a0, msg_sirena_attiva
-    syscall
+    jal     msg_stato_sirena
+    jal     msg_stato_acqua
+    jal     msg_stato_VVFF
 
-    j dopo_sirena
-    
-    stampa_sirena_non_attiva:
+    lw      $ra, 0($sp)
+    addi    $sp, $sp, 4
+    jr      $ra
+    nop
+
+# -------------- MESSAGGIO STATO SIRENA (BIT 0) --------------
+msg_stato_sirena:
+    addi    $sp, $sp, -4            # Stack
+    sw      $ra, 0($sp)             # salvo il valore del reg di ritorno
+
+    lb      $t0, 0($s1)             # carico il valore di COMMAND in $t0
+
+    # creo la maschera per il primo bit 
+
+    # per ottenere il valore del primo bit:
+    # and 00000001 
+
+    and     $t1, $t0, 0x1           # $t1 contiene il valore del primo bit (0)
+
+    # controllo se e' asserito
+    beq     $t1, 0x1, msg_stato_sirena_attiva         # se asserito messaggio sirena attiva
+    # messaggio sirena non attiva
+    li      $v0, 4
+    la      $a0, msg_sirena_disattiva
+    syscall
+    j       fin_msg_stato_sirena
+
+    msg_stato_sirena_attiva:
+        # sirena attiva
         li      $v0, 4
-        la      $a0, msg_sirena_disattiva
+        la      $a0, msg_sirena_attiva
         syscall
 
-    dopo_sirena:
-        # verifico se il secondo bit  (1)
-        andi    $t1, $t0, 0x02
-        beq     $t1, $zero, stampa_acqua_non_attiva
-        # acqua attiva
+    fin_msg_stato_sirena:
+        lw      $ra, 0($sp)             # recupero il valore del reg di ritorno
+        addi    $sp, $sp, 4             # ripristino lo stack
+        jr      $ra                     # torno indietro
+        nop
+
+# -------------- MESSAGGIO STATO ACQUA (BIT 1) --------------
+msg_stato_acqua:
+    addi    $sp, $sp, -4            # Stack
+    sw      $ra, 0($sp)             # salvo il valore del reg di ritorno
+
+    lb      $t0, 0($s1)             # carico il valore di COMMAND in $t0
+
+    # creo la maschera per il secondo bit 
+
+    # per ottenere il valore del secondo bit:
+    # and 00000010 
+
+    and     $t1, $t0, 0x2           # $t1 contiene il valore del secondo bit (1)
+
+    # controllo se e' asserito
+    beq     $t1, 0x2, msg_stato_acqua_attiva         # se asserito messaggio acqua attiva
+    # messaggio sirena non attiva
+    li      $v0, 4
+    la      $a0, msg_acqua_disattiva
+    syscall
+    j       fin_msg_stato_acqua
+
+    msg_stato_acqua_attiva:
+        # sirena attiva
         li      $v0, 4
         la      $a0, msg_acqua_attiva
         syscall
-        j       dopo_acqua
 
-    stampa_acqua_non_attiva:
-        li      $v0, 4
-        la      $a0, msg_acqua_disattiva
-        syscall
+    fin_msg_stato_acqua:
+        lw      $ra, 0($sp)             # recupero il valore del reg di ritorno
+        addi    $sp, $sp, 4             # ripristino lo stack
+        jr      $ra                     # torno indietro
+        nop
 
-    dopo_acqua:
-        # verifico se il terzo bit    (2)
-        andi   $t1, $t0, 0x04
-        beq    $t1, $zero, stampa_pompieri_non_chiamati
-        # pompieri chiamati
+# -------------- MESSAGGIO STATO VVFF (BIT 2) --------------
+msg_stato_VVFF:
+    addi    $sp, $sp, -4            # Stack
+    sw      $ra, 0($sp)             # salvo il valore del reg di ritorno
+
+    lb      $t0, 0($s1)             # carico il valore di COMMAND in $t0
+
+    # creo la maschera per il terzo bit 
+
+    # per ottenere il valore del terzo bit:
+    # and 00000100 
+
+    and     $t1, $t0, 0x4           # $t1 contiene il valore del terzo bit (2)
+
+    # controllo se e' asserito
+    beq     $t1, 0x04, msg_stato_VVFF_chiamato         # se asserito messaggio di chiamata
+    # messaggio sirena non attiva
+    li      $v0, 4
+    la      $a0, msg_VVFF_non_chiamati
+    syscall
+    j       fin_msg_stato_VVFF
+
+    msg_stato_VVFF_chiamato:
+        # sirena attiva
         li      $v0, 4
         la      $a0, msg_chiamata_VVFF
         syscall
 
-    stampa_pompieri_non_chiamati:
-        li      $v0, 4
-        la      $a0, msg_VVFF_non_chiamati
-        syscall
-
-    fin_msg_command_status:
-        lw      $ra, 0($sp)     # recupero l'indirizzo di ritorno
-        addi    $sp, $sp, 4     # resetto lo stack
-        jr      $ra             # ritorno al chiamante
+    fin_msg_stato_VVFF:
+        lw      $ra, 0($sp)             # recupero il valore del reg di ritorno
+        addi    $sp, $sp, 4             # ripristino lo stack
+        jr      $ra                     # torno indietro
         nop
 
 # -------------- MESSAGGIO TEMPERATURA SENSORE --------------
