@@ -55,6 +55,7 @@ msg_acqua_attiva:        .asciiz " Acqua attiva\n"
 msg_acqua_disattiva:     .asciiz " Acqua spenta\n"
 msg_chiamata_VVFF:       .asciiz " Chiamata VVFF\n"
 msg_VVFF_non_chiamati:   .asciiz " VVFF non chiamati\n"
+msg_VVFF_fine_chiamata:  .asciiz " Fine chiamata VVFF\n"
 msg_temperatura:         .asciiz " Temperatura sensore:  "
 msg_id:                  .asciiz " Id sensore: "
 msg_valore:              .asciiz " Valore sensore: "
@@ -611,7 +612,7 @@ end_chiama_vvff:
     sb      $t9, 0($s1)             # aggiorno COMMAND con il nuovo valore
     # messaggio sulla console
     li      $v0, 4
-    la      $a0, msg_VVFF_non_chiamati
+    la      $a0, msg_VVFF_fine_chiamata
     syscall
 
     lw      $ra, 0($sp)             # carico il valore dallo stack
