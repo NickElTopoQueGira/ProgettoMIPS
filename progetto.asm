@@ -51,6 +51,13 @@ modalita_scelta: .word 0    # variabile che memorizza la modilità dei sensori (
 .align 0
 COMMAND:        .byte 0  
 
+# --- Nuove variabili per gestione spegnimento acqua ---
+.align 2
+cont_cicli_sicuri:   .word 0   # contatore che memorizza il numero di cicli consecutivi in cui
+                               # NON sono stati rilevati fumo o temperature >= 60°C
+flag_rischio_ciclo:  .word 0   # flag che indica se durante il ciclo attuale è stata rilevata
+                               # almeno una condizione di rischio (fumo o temp >= 60°C)
+
 # messaggi
 msg_sirena_attiva:       .asciiz " Sirena attiva\n"
 msg_sirena_disattiva:    .asciiz " Sirena spenta\n"
@@ -173,6 +180,8 @@ fine_scelta_iniz:
         
         # incremento del contatore cont_sec_pass
 		jal 	inc_cont_sec_pass
+                # --- Reset del flag rischio per nuovo ciclo ---
+        sw      $zero, flag_rischio_ciclo
 
         # ciclo di lettura dell'area di memoria 'TEMPERATURE'    
         leggi_temperature:            
@@ -250,9 +259,30 @@ fine_scelta_iniz:
 
                 # --- Controllo se reinserire i sensori manualmente a fine ciclo ---
 fine_lettura_ciclo:
- # Controllo per reinserire i sensori manualmente 
-lw      $t0, modalita_scelta              # carico la modalità scelta
-beq     $t0, $zero, skip_reinserimento    # se 0 = statici, salto
+# --- Verifica cicli sicuri e spegnimento acqua ---
+lw      $t0, flag_rischio_ciclo          # leggo il flag rischio
+bne     $t0, $zero, ciclo_non_sicuro     # se rischio presente -> reset contatore
+
+# ciclo sicuro: incremento contatore cicli_sicuri
+lw      $t1, cont_cicli_sicuri
+addi    $t1, $t1, 1
+sw      $t1, cont_cicli_sicuri
+
+li      $t2, 5                          # soglia di cicli sicuri per spegnere acqua
+blt     $t1, $t2, skip_spegni             # se non ancora raggiunta, salto
+
+jal     disattiva_acqua                   # spengo impianto acqua
+sw      $zero, cont_cicli_sicuri          # resetto contatore cicli sicuri
+
+j       skip_spegni
+
+ciclo_non_sicuro:
+sw      $zero, cont_cicli_sicuri          # azzero contatore cicli sicuri
+
+skip_spegni:
+# --- reinserimento manuale invariato ---
+lw      $t0, modalita_scelta
+beq     $t0, $zero, skip_reinserimento
 # modalità manuale → chiedo reinserimento
 jal     init_sensori_manuale               # richiamo routine inserimento manuale
 
@@ -283,6 +313,9 @@ temp_maggiore_quaranta:
     blt     $a1, 0x3C, fin_temp_maggiore_quaranta
     
 	# la temperatura e' >= 60
+        # --- Segna rischio ciclo ---
+    li      $t0, 1
+    sw      $t0, flag_rischio_ciclo
     jal     inc_cont_temp_over          # aggiorno il contatore sensori attivi (temp >= 60)
 
     lw      $a0, 0($sp)                 # argomento 0: recupero il valore dell'id del sensore
@@ -318,8 +351,12 @@ cond_att_sirena:
 
     # controllo del valore
     beq     $t3, $zero, non_attiva_sirena   # se il bit di fumo non e' asserito non eseguo niente
-    # altrimenti
-    jal attiva_sirena                       # attiva la sirena
+        # --- Segna rischio ciclo ---
+    # --- se il bit di fumo è asserito, oltre ad attivare la sirena segno rischio nel ciclo ---
+    li      $t4, 1                      # carico valore 1
+    sw      $t4, flag_rischio_ciclo      # imposto il flag rischio ciclo
+    jal     attiva_sirena                # attivo la sirena
+
 
     non_attiva_sirena:
         lw      $ra, 4($sp)                 # recupero il valore dell'indirizzo al quale tornare
