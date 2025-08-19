@@ -53,7 +53,7 @@ msg_sirena_attiva:       .asciiz " Sirena attiva\n"
 msg_sirena_disattiva:    .asciiz " Sirena spenta\n"
 msg_acqua_attiva:        .asciiz " Acqua attiva\n"
 msg_acqua_disattiva:     .asciiz " Acqua spenta\n"
-msg_chiamata_VVFF:       .asciiz " Chiamta ai VVFF in corso\n"
+msg_chiamata_VVFF:       .asciiz " Chiamata ai VVFF in corso\n"
 msg_VVFF_non_chiamati:   .asciiz " VVFF NON chiamati\n"
 msg_VVFF_fine_chiamata:  .asciiz " Fine chiamata VVFF\n"
 msg_temperatura:         .asciiz " Temperatura sensore:  "
@@ -93,7 +93,7 @@ main:
 									# nel registro $s5
     
     # -----inizializzazione manuale sensori -----
-#   jal     init_sensori_manuale
+   jal     init_sensori_manuale
 
     # inizializzazione RECORD
     jal     reset_record
