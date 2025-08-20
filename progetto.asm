@@ -110,45 +110,45 @@ main:
     la      $a0, msg_iniziale            # carico in $a0 l'indirizzo del messaggio iniziale
     syscall                              # eseguo la stampa del messaggio iniziale
 
-# --- SCELTA MODALITÀ CON LOOP E FORMATTAZIONE ---
-scelta_modalita_loop:
-    li      $v0, 4                       # carico in $v0 il codice per la stampa di una stringa
-    la      $a0, msg_scelta_modalita      # carico in $a0 la domanda di scelta modalità
-    syscall                               # stampo la domanda
+    # --- SCELTA MODALITÀ CON LOOP E FORMATTAZIONE ---
+    scelta_modalita_loop:
+        li      $v0, 4                       # carico in $v0 il codice per la stampa di una stringa
+        la      $a0, msg_scelta_modalita      # carico in $a0 la domanda di scelta modalità
+        syscall                               # stampo la domanda
 
-    li      $v0, 5                       # carico in $v0 il codice per la lettura di un intero da tastiera
-    syscall                               # eseguo la lettura
-    move    $t0, $v0                      # salvo in $t0 il valore appena inserito dall'utente
+        li      $v0, 5                       # carico in $v0 il codice per la lettura di un intero da tastiera
+        syscall                               # eseguo la lettura
+        move    $t0, $v0                      # salvo in $t0 il valore appena inserito dall'utente
 
-    li      $v0, 4                       
-    la      $a0, msg_linea
-    syscall
+        li      $v0, 4                       
+        la      $a0, msg_linea
+        syscall
 
-    li      $v0, 4
-    la      $a0, msg_acapo
-    syscall
+        li      $v0, 4
+        la      $a0, msg_acapo
+        syscall
 
-    beq     $t0, $zero, usa_statici       # se scelta=0 salto a usa_statici
-    li      $t1, 1
-    beq     $t0, $t1, scelta_manuale      # se scelta=1 salto a scelta_manuale
+        beq     $t0, $zero, usa_statici       # se scelta=0 salto a usa_statici
+        li      $t1, 1
+        beq     $t0, $t1, scelta_manuale      # se scelta=1 salto a scelta_manuale
 
-    li      $v0, 4
-    la      $a0, msg_err_scelta
-    syscall
-    j       scelta_modalita_loop
+        li      $v0, 4
+        la      $a0, msg_err_scelta
+        syscall
+        j       scelta_modalita_loop
 
-scelta_manuale:
-    li      $t2, 1                        # carico 1 = modalità manuale
-    sw      $t2, modalita_scelta           # salvo la modalità scelta in memoria
-    jal     init_sensori_manuale           # inizializzo sensori manualmente
-    j       fine_scelta_iniz               # salto alla fine della scelta modalità
+    scelta_manuale:
+        li      $t2, 1                        # carico 1 = modalità manuale
+        sw      $t2, modalita_scelta           # salvo la modalità scelta in memoria
+        jal     init_sensori_manuale           # inizializzo sensori manualmente
+        j       fine_scelta_iniz               # salto alla fine della scelta modalità
 
-usa_statici:
-    sw      $zero, modalita_scelta         # salvo 0 = modalità dati precaricati
-    j       fine_scelta_iniz
+    usa_statici:
+        sw      $zero, modalita_scelta         # salvo 0 = modalità dati precaricati
+        j       fine_scelta_iniz
 
-fine_scelta_iniz:
-    jal     reset_record
+    fine_scelta_iniz:
+        jal     reset_record
 
 
     # inizializzazione RECORD
@@ -258,36 +258,36 @@ fine_scelta_iniz:
                     j           ciclo_di_lettura        # ritorno al ciclo di lettura
 
                 # --- Controllo se reinserire i sensori manualmente a fine ciclo ---
-fine_lettura_ciclo:
-# --- Verifica cicli sicuri e spegnimento acqua ---
-lw      $t0, flag_rischio_ciclo          # leggo il flag rischio
-bne     $t0, $zero, ciclo_non_sicuro     # se rischio presente -> reset contatore
+                fine_lettura_ciclo:
+                    # --- Verifica cicli sicuri e spegnimento acqua ---
+                    lw      $t0, flag_rischio_ciclo          # leggo il flag rischio
+                    bne     $t0, $zero, ciclo_non_sicuro     # se rischio presente -> reset contatore
 
-# ciclo sicuro: incremento contatore cicli_sicuri
-lw      $t1, cont_cicli_sicuri
-addi    $t1, $t1, 1
-sw      $t1, cont_cicli_sicuri
+                    # ciclo sicuro: incremento contatore cicli_sicuri
+                    lw      $t1, cont_cicli_sicuri
+                    addi    $t1, $t1, 1
+                    sw      $t1, cont_cicli_sicuri
 
-li      $t2, 5                          # soglia di cicli sicuri per spegnere acqua
-blt     $t1, $t2, skip_spegni             # se non ancora raggiunta, salto
+                    li      $t2, 5                          # soglia di cicli sicuri per spegnere acqua
+                    blt     $t1, $t2, skip_spegni             # se non ancora raggiunta, salto
 
-jal     disattiva_acqua                   # spengo impianto acqua
-sw      $zero, cont_cicli_sicuri          # resetto contatore cicli sicuri
+                    jal     disattiva_acqua                   # spengo impianto acqua
+                    sw      $zero, cont_cicli_sicuri          # resetto contatore cicli sicuri
 
-j       skip_spegni
+                    j       skip_spegni
 
-ciclo_non_sicuro:
-sw      $zero, cont_cicli_sicuri          # azzero contatore cicli sicuri
+                ciclo_non_sicuro:
+                    sw      $zero, cont_cicli_sicuri          # azzero contatore cicli sicuri
 
-skip_spegni:
-# --- reinserimento manuale invariato ---
-lw      $t0, modalita_scelta
-beq     $t0, $zero, skip_reinserimento
-# modalità manuale → chiedo reinserimento
-jal     init_sensori_manuale               # richiamo routine inserimento manuale
+                skip_spegni:
+                    # --- reinserimento manuale invariato ---
+                    lw      $t0, modalita_scelta
+                    beq     $t0, $zero, skip_reinserimento
+                    # modalità manuale → chiedo reinserimento
+                    jal     init_sensori_manuale               # richiamo routine inserimento manuale
 
-skip_reinserimento:
-j       main_ciclo                         # ritorno all'inizio del ciclo
+                skip_reinserimento:
+                    j       main_ciclo                         # ritorno all'inizio del ciclo
 
 
     # fine del programma
